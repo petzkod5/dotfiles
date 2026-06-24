@@ -1,5 +1,5 @@
 ---
-# Galaxy dependencies. Install with: make deps   (or)
+# Galaxy dependencies. Install with `dotfiles update`, or directly:
 #   ansible-galaxy collection install -r requirements.yml
 collections:
   - name: community.general

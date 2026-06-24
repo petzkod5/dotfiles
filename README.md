@@ -85,7 +85,8 @@ ansible-playbook site.yml --limit "$(hostname)" --check --diff -K     # = check
 ansible-inventory --host "$(hostname)"          # show this host's merged vars
 ```
 
-`make deps | syntax | lint | check | run` are thin wrappers too (see `Makefile`).
+Lint and syntax-check the repo with `yamllint . && ansible-lint` and
+`ansible-playbook site.yml --syntax-check`.
 
 ## Customising it for yourself
 

@@ -1,5 +1,5 @@
 ---
-# ansible-lint configuration. Run with: make lint  (requires ansible-lint).
+# ansible-lint configuration. Run: ansible-lint  (requires ansible-lint installed).
 profile: production
 
 exclude_paths:
