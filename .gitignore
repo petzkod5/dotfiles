@@ -1,0 +1,82 @@
+# =============================================================================
+# .gitignore — keep generated artifacts and (especially) secrets out of git.
+# Note: git only treats a line as a comment when it STARTS with '#'.
+# =============================================================================
+
+# --- Ansible runtime artifacts ----------------------------------------------
+*.retry
+# Fact cache (ansible.cfg: fact_caching_connection = .ansible_cache)
+.ansible_cache/
+*.log
+ansible.log
+# Local ansible home (collections, tmp)
+.ansible/
+
+# --- Locally installed Galaxy content ---------------------------------------
+collections/
+roles/external/
+
+# --- Secrets — NEVER commit credentials or decrypted material ----------------
+# Vault password files and encrypted vaults
+.vault_pass
+.vault-pass
+vault_pass.txt
+*.vault
+# Credential / env files (e.g. `ansible-vault create creds.yml`, see README)
+creds.yml
+credentials.yml
+*.creds
+.env
+.env.*
+# Private keys and key-bearing material
+*.pem
+*.key
+*.pfx
+*.p12
+id_rsa*
+id_ed25519*
+id_ecdsa*
+id_dsa*
+*.ppk
+*.ovpn
+*.age
+*.gpg
+*.kdbx
+# Bitwarden / session leftovers
+.bw-session
+bw-session*
+# One-time backups the roles make of pre-existing dotfiles
+*.pre-ansible
+
+# --- Secret-scanner output (from `dotfiles commit`) --------------------------
+gitleaks-report.json
+*.gitleaks.json
+trufflehog-report.json
+
+# --- Python -----------------------------------------------------------------
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+*.egg-info/
+
+# --- Editor / IDE -----------------------------------------------------------
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.*.swp
+
+# --- OS cruft ---------------------------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+desktop.ini
+
+# --- Misc -------------------------------------------------------------------
+*.bak
+*.tmp
+*.orig

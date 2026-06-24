@@ -1,0 +1,68 @@
+---
+# Package installation. Each family task folds the cache refresh into the
+# install itself so repeat runs stay idempotent: a bare "pacman -Sy" always
+# reports 'changed', but community.general.pacman >= 5.0.0 does not count the
+# cache refresh as a change when 'name' is given; apt uses cache_valid_time;
+# dnf refreshes its own metadata on demand.
+
+- name: Resolve the full package set
+  ansible.builtin.set_fact:
+    _common_packages_resolved: >-
+      {{ (common_packages
+          + (__common_os_packages | default([]))
+          + common_packages_all
+          + common_packages_family
+          + common_packages_host) | unique }}
+
+- name: Install packages (Archlinux)
+  community.general.pacman:
+    name: "{{ _common_packages_resolved }}"
+    state: present
+    update_cache: true
+  when: ansible_facts['os_family'] == 'Archlinux'
+
+# GitHub CLI is not in the default Debian/Ubuntu repos — add the official
+# apt repository (per https://github.com/cli/cli/blob/trunk/docs/install_linux.md)
+# before the apt install below picks up `gh`.
+- name: Set up the GitHub CLI apt repository (Debian)
+  when: ansible_facts['os_family'] == 'Debian'
+  block:
+    - name: Ensure the apt keyrings directory exists
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: "0755"
+
+    - name: Add the GitHub CLI signing key
+      ansible.builtin.get_url:
+        url: https://cli.github.com/packages/githubcli-archive-keyring.gpg
+        dest: /etc/apt/keyrings/githubcli-archive-keyring.gpg
+        mode: "0644"
+
+    - name: Add the GitHub CLI apt source
+      ansible.builtin.copy:
+        dest: /etc/apt/sources.list.d/github-cli.list
+        content: "deb [arch={{ _deb_arch }} signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main\n"
+        mode: "0644"
+      vars:
+        _deb_arch: "{{ {'x86_64': 'amd64', 'aarch64': 'arm64', 'armv7l': 'armhf'}[ansible_facts['architecture']] | default(ansible_facts['architecture']) }}"
+      register: _gh_repo
+
+    - name: Refresh apt cache after adding the GitHub CLI repo
+      ansible.builtin.apt:
+        update_cache: true
+      when: _gh_repo is changed
+
+- name: Install packages (Debian)
+  ansible.builtin.apt:
+    name: "{{ _common_packages_resolved }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  when: ansible_facts['os_family'] == 'Debian'
+
+- name: Install packages (RedHat)
+  ansible.builtin.dnf:
+    name: "{{ _common_packages_resolved }}"
+    state: present
+  when: ansible_facts['os_family'] == 'RedHat'

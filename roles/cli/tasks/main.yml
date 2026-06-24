@@ -1,0 +1,33 @@
+---
+# Symlink the repo-tracked `dotfiles` CLI into the user's ~/.local/bin.
+# Runs as the user (become: false, via the additional_roles play). Assumes a
+# local connection so the symlink target (this repo) exists on the machine.
+
+- name: Identify the target user
+  ansible.builtin.command:
+    cmd: id -un
+  register: _cli_user
+  changed_when: false
+  check_mode: false
+
+- name: Look up the target user's home directory
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ _cli_user.stdout }}"
+
+- name: Resolve the home directory
+  ansible.builtin.set_fact:
+    cli_home: "{{ ansible_facts.getent_passwd[_cli_user.stdout][4] }}"
+
+- name: Ensure the user bin directory exists
+  ansible.builtin.file:
+    path: "{{ cli_home }}/{{ cli_bindir }}"
+    state: directory
+    mode: "0755"
+
+- name: Symlink the dotfiles CLI onto PATH
+  ansible.builtin.file:
+    src: "{{ playbook_dir }}/bin/dotfiles"
+    dest: "{{ cli_home }}/{{ cli_bindir }}/dotfiles"
+    state: link
+    force: true

@@ -1,0 +1,221 @@
+#!/usr/bin/env bash
+#
+# dotfiles — sync this machine to the configuration in the Ansible playbook.
+#
+# Installed by the `cli` role as a symlink at ~/.local/bin/dotfiles -> <repo>/bin/dotfiles.
+# It resolves the repo from its own real path, so it works from any cwd.
+set -euo pipefail
+
+# --- locate the repo --------------------------------------------------------
+self="$(readlink -f "${BASH_SOURCE[0]}")"
+DOTFILES_DIR="${DOTFILES_DIR:-$(dirname "$(dirname "$self")")}"
+HOST="${DOTFILES_HOST:-$(hostname)}"
+
+# --- output helpers ---------------------------------------------------------
+if [ -t 1 ]; then
+  b=$'\033[1m'; g=$'\033[1;32m'; y=$'\033[1;33m'; r=$'\033[1;31m'; n=$'\033[0m'
+else
+  b=""; g=""; y=""; r=""; n=""
+fi
+say()  { printf '%s%s%s\n' "$g" "$*" "$n"; }
+warn() { printf '%s%s%s\n' "$y" "$*" "$n" >&2; }
+die()  { printf '%s%s%s\n' "$r" "$*" "$n" >&2; exit 1; }
+
+# --- preflight --------------------------------------------------------------
+command -v ansible-playbook >/dev/null 2>&1 \
+  || die "ansible-playbook not found — run ${DOTFILES_DIR}/bootstrap.sh first."
+[ -f "${DOTFILES_DIR}/site.yml" ] \
+  || die "site.yml not found in ${DOTFILES_DIR} (set DOTFILES_DIR to the repo)."
+
+# Become (sudo) password. Ansible runs sudo with -n, so if a password is needed
+# and none was supplied the run dies mid-play with no chance to type it. A probe
+# like `sudo -n true` is unreliable: it also succeeds on a *cached* timestamp
+# that may expire before Ansible escalates. So prompt by default; opt out only
+# for genuine NOPASSWD / headless sudo with DOTFILES_BECOME=none (no|0).
+become=(--ask-become-pass)
+case "${DOTFILES_BECOME:-}" in
+  none|no|0) become=() ;;
+esac
+
+play() {  # play <playbook> [extra ansible-playbook args...]
+  local pb="$1"; shift
+  ( cd "$DOTFILES_DIR" && ansible-playbook "$pb" --limit "$HOST" "${become[@]}" "$@" )
+}
+
+add_host() {  # add-host [HOSTNAME] — register a new machine so it can be configured
+  local host="${1:-$HOST}"
+  case "$host" in
+    ""|-*)             die "usage: dotfiles add-host [HOSTNAME]" ;;
+    *[!A-Za-z0-9._-]*) die "invalid hostname: '${host}'" ;;
+  esac
+
+  # Map the running OS (or $DOTFILES_FAMILY) to an inventory family group.
+  local family="${DOTFILES_FAMILY:-}"
+  if [ -z "$family" ]; then
+    # shellcheck disable=SC1091
+    . /etc/os-release 2>/dev/null || true
+    case " ${ID:-} ${ID_LIKE:-} " in
+      *arch*)                   family=archlinux ;;
+      *debian*|*ubuntu*)        family=debian ;;
+      *rhel*|*fedora*|*centos*) family=redhat ;;
+      *) die "Cannot detect OS family — set DOTFILES_FAMILY=archlinux|debian|redhat." ;;
+    esac
+  fi
+  case "$family" in
+    archlinux|debian|redhat) ;;
+    *) die "Unknown family '${family}' (want archlinux, debian or redhat)." ;;
+  esac
+
+  local inv="${DOTFILES_DIR}/inventory/hosts.yml"
+  local hv="${DOTFILES_DIR}/inventory/host_vars/${host}.yml"
+  local py; py="$(command -v python3 || command -v python)" \
+    || die "python not found — run ${DOTFILES_DIR}/bootstrap.sh first."
+
+  say "Registering '${host}' in the '${family}' group"
+
+  # 1) Inventory entry — surgical line insert, comment-preserving and idempotent.
+  local res
+  res="$("$py" - "$inv" "$family" "$host" <<'PY'
+import re, sys
+path, family, host = sys.argv[1:4]
+with open(path) as f:
+    lines = f.readlines()
+if any(re.match(r"^ {8}" + re.escape(host) + r":\s*$", ln) for ln in lines):
+    print("exists"); sys.exit(0)
+gi = next((i for i, ln in enumerate(lines)
+           if re.match(r"^    " + re.escape(family) + r":\s*$", ln)), None)
+if gi is None:
+    sys.exit(2)
+hi = None
+for j in range(gi + 1, len(lines)):
+    if re.match(r"^    [A-Za-z_]\w*:\s*$", lines[j]):
+        break
+    if lines[j].strip() in ("hosts:", "hosts: {}"):
+        hi = j; break
+if hi is None:
+    sys.exit(3)
+if lines[hi].strip() == "hosts: {}":
+    lines[hi] = "      hosts:\n"
+lines[hi + 1:hi + 1] = ["        %s:\n" % host,
+                        "          ansible_connection: local\n"]
+with open(path, "w") as f:
+    f.writelines(lines)
+print("added")
+PY
+)" || die "Could not update ${inv} (group '${family}' missing?)."
+  case "$res" in
+    added) say "  inventory: added under '${family}' (ansible_connection: local)" ;;
+    *)     warn "  inventory: '${host}' already present — left unchanged" ;;
+  esac
+
+  # 2) host_vars file — opt into the dotfile roles; never clobber an existing one.
+  if [ -e "$hv" ]; then
+    warn "  host_vars: ${host}.yml already exists — left unchanged"
+  else
+    mkdir -p "$(dirname "$hv")"
+    cat > "$hv" <<EOF
+---
+# HOST layer — ${host}. Created by 'dotfiles add-host'.
+# Per-machine deviations go here (see the README "Layering model").
+
+# Roles run for this host beyond the common baseline. Trim to taste.
+additional_roles:
+  - zsh
+  - cli
+  - git
+
+# Per-host package additions (use names valid for this OS family):
+# common_packages_host:
+#   - ripgrep
+EOF
+    say "  host_vars: created ${host}.yml"
+  fi
+
+  printf '\n%sNext:%s review the two files, then apply this machine:\n  dotfiles sync\n' "$b" "$n"
+}
+
+scan_secrets() {  # run the first available well-known secret scanner on staged changes
+  if command -v gitleaks >/dev/null 2>&1; then
+    say "  scanning staged changes with gitleaks"
+    # `protect --staged` checks the index (uncommitted) — the documented v8 pre-commit mode.
+    gitleaks protect --staged --redact --no-banner \
+      || die "gitleaks flagged a potential secret — commit aborted. Fix or unstage, then retry."
+  elif command -v git-secrets >/dev/null 2>&1; then
+    say "  scanning with git-secrets"
+    git secrets --scan \
+      || die "git-secrets flagged a potential secret — commit aborted."
+  else
+    warn "  no secret scanner found (install gitleaks or git-secrets) — skipping scan"
+  fi
+}
+
+do_commit() {  # commit — stage all changes, scan for secrets, commit with a dated message
+  command -v git >/dev/null 2>&1 || die "git not found."
+  cd "$DOTFILES_DIR" || die "cannot enter ${DOTFILES_DIR}."
+  git rev-parse --is-inside-work-tree >/dev/null 2>&1 \
+    || die "${DOTFILES_DIR} is not a git repository — run 'git init' there first."
+
+  if [ -z "$(git status --porcelain)" ]; then
+    say "Nothing to commit — working tree clean."
+    return 0
+  fi
+
+  say "Staging all changes in ${DOTFILES_DIR}"
+  git add -A
+
+  scan_secrets   # aborts the commit if a scanner flags a secret
+
+  local stamp changelog
+  stamp="$(date '+%Y-%m-%d %H:%M')"
+  changelog="$(git status --short)"
+  git commit --quiet -m "Update ${stamp}" -m "${changelog}"
+  say "Committed 'Update ${stamp}'"
+}
+
+usage() {
+  cat <<EOF
+${b}dotfiles${n} — sync this machine to ${DOTFILES_DIR}
+
+${b}Usage:${n} dotfiles <command> [extra ansible-playbook args...]
+
+${b}Commands:${n}
+  sync      Apply the playbook to this host (main command)
+  check     Preview changes without applying them (--check --diff)
+  secrets   Pull secrets from Bitwarden (bitwarden role only)
+  update    Install/refresh Galaxy collections (requirements.yml)
+  add-host  Register this machine (or HOST) in the inventory + host_vars
+  commit    Stage all changes, scan for secrets, commit with a dated message
+  edit      Open the repo in \$EDITOR
+  status    Show repo path, host and git working-tree status
+  help      Show this help
+
+Extra args pass through to ansible-playbook, e.g.:
+  dotfiles sync --skip-tags bitwarden     # config only, skip secret-pulling
+  dotfiles sync --tags packages
+  dotfiles check --tags additional_roles
+
+Env: DOTFILES_DIR (repo, auto-detected) · DOTFILES_HOST (default: \$(hostname))
+     DOTFILES_BECOME=none to skip the sudo-password prompt (NOPASSWD/headless)
+     DOTFILES_FAMILY=archlinux|debian|redhat to override add-host detection
+EOF
+}
+
+cmd="${1:-help}"; shift 2>/dev/null || true
+case "$cmd" in
+  sync)            say "Applying ${HOST} <- ${DOTFILES_DIR}"; play site.yml "$@" ;;
+  check|diff)      say "Previewing ${HOST} (no changes applied)"; play site.yml --check --diff "$@" ;;
+  secrets)         say "Pulling secrets for ${HOST}"
+                   # Only the bitwarden role: scope to the additional_roles play
+                   # (skips the common baseline) and override the role list.
+                   play site.yml --tags additional_roles -e '{"additional_roles":["bitwarden"]}' "$@" ;;
+  update)          say "Refreshing Galaxy collections"
+                   ( cd "$DOTFILES_DIR" && ansible-galaxy collection install -r requirements.yml "$@" ) ;;
+  add-host)        add_host "$@" ;;
+  commit)          do_commit "$@" ;;
+  edit)            ( cd "$DOTFILES_DIR" && exec "${EDITOR:-vi}" . ) ;;
+  status)          printf '%srepo%s %s\n%shost%s %s\n' "$b" "$n" "$DOTFILES_DIR" "$b" "$n" "$HOST"
+                   git -C "$DOTFILES_DIR" status -sb ;;
+  version|-V|--version) git -C "$DOTFILES_DIR" describe --always --dirty 2>/dev/null || echo unknown ;;
+  help|-h|--help)  usage ;;
+  *)               warn "Unknown command: ${cmd}"; usage; exit 1 ;;
+esac

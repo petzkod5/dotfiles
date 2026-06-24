@@ -1,0 +1,15 @@
+---
+# =============================================================================
+# FAMILY layer — RedHat (Fedora, RHEL, Rocky, Alma).
+# Overrides group_vars/all; overridden by host_vars/<host>.
+# =============================================================================
+
+# Package names specific to the RedHat family.
+common_packages_family:
+  - openssh-clients
+  - dnf-plugins-core
+
+# Discord is not in the default Fedora/RHEL repos -> install via Flatpak.
+common_flatpak_packages_family:
+  - name: com.discordapp.Discord
+    remote: flathub

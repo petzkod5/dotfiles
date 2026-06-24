@@ -1,0 +1,3 @@
+---
+# Directory (relative to the user's home) the dotfiles CLI is symlinked into.
+cli_bindir: ".local/bin"

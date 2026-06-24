@@ -1,0 +1,42 @@
+---
+# Base system configuration shared by all distributions.
+
+- name: Set system timezone
+  community.general.timezone:
+    name: "{{ common_timezone }}"
+
+- name: Generate and enable locale
+  community.general.locale_gen:
+    name: "{{ common_locale }}"
+    state: present
+  when:
+    - common_manage_locale | bool
+    # locale_gen drives /etc/locale.gen, which only exists on these families.
+    - ansible_facts['os_family'] in ['Debian', 'Archlinux']
+
+- name: Set system hostname
+  ansible.builtin.hostname:
+    name: "{{ common_hostname }}"
+  when: common_manage_hostname | bool
+
+- name: Identify the login (non-root) user
+  ansible.builtin.command:
+    cmd: id -un
+  become: false
+  register: _common_login_user
+  changed_when: false
+  when: common_manage_user_shell | bool
+
+- name: Check the configured login shell exists
+  ansible.builtin.stat:
+    path: "{{ common_user_shell }}"
+  register: _common_user_shell_stat
+  when: common_manage_user_shell | bool
+
+- name: Set the default shell for the login user
+  ansible.builtin.user:
+    name: "{{ _common_login_user.stdout }}"
+    shell: "{{ common_user_shell }}"
+  when:
+    - common_manage_user_shell | bool
+    - _common_user_shell_stat.stat.exists | default(false)

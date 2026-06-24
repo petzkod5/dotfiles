@@ -1,0 +1,9 @@
+---
+# Role-internal OS abstraction for the Debian family (Debian, Ubuntu, ...).
+# Auto-loaded by tasks/main.yml from ansible_facts['os_family'].
+__common_os_packages:
+  - build-essential   # dev toolchain ('base-devel' on Arch)
+  - fd-find           # 'fd' on Arch
+  - gh                # GitHub CLI (needs GitHub's apt repo, added in packages.yml)
+  - manpages
+  - man-db

@@ -1,0 +1,45 @@
+---
+# =============================================================================
+# bitwarden role — pull SSH keys and files from your Bitwarden vault.
+# Opt-in: via `dotfiles secrets`, or by listing `bitwarden` in a host's additional_roles.
+# =============================================================================
+
+# Package providing the `bw` CLI (Arch official repo; on Debian/Fedora install
+# the npm package @bitwarden/cli instead).
+bitwarden_cli_package: "bitwarden-cli"
+
+# Vault server. Cloud default; use https://vault.bitwarden.eu for EU, or your
+# self-hosted URL.
+bitwarden_server: "https://vault.bitwarden.com"
+
+# Where SSH material is written. bitwarden_home is resolved at runtime (in
+# tasks/main.yml) to the home of the user the role runs as — never root.
+bitwarden_ssh_dir: "{{ bitwarden_home }}/.ssh"
+
+# Re-lock the vault when the run finishes.
+bitwarden_lock_when_done: true
+
+# SSH Key items to materialise. Each entry:
+#   item: item name or id of a Bitwarden "SSH Key" item
+#   dest: path for the private key (public key is written to dest + '.pub')
+bitwarden_ssh_keys: []
+
+# Files stored as item attachments to download. Each entry:
+#   item:       item name or id holding the attachment
+#   attachment: attachment filename as stored in Bitwarden
+#   dest:       absolute path to write
+#   mode:       file mode (default '0600')
+bitwarden_files: []
+
+# Secure notes whose body should be written to a file (e.g. a SOPS age key).
+# Each entry:
+#   item: item name or id of a Bitwarden "Secure note" (uses the note body)
+#   dest: absolute path to write
+#   mode: file mode (default '0600')
+bitwarden_notes: []
+
+# --- Credentials ------------------------------------------------------------
+# bitwarden_client_id / bitwarden_client_secret: API key, only needed to LOG IN.
+#   Skipped entirely when the CLI is already authenticated. Prompted when needed,
+#   or pass via -e (see README). Low-sensitivity + revocable.
+# bitwarden_master_password: prompted at runtime to unlock; NEVER store it.

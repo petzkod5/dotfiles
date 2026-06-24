@@ -76,6 +76,10 @@ installs the concatenation (de-duplicated):
     │   ├── tasks/main.yml
     │   └── meta/main.yml
     ├── cli/                     # symlinks the dotfiles CLI onto PATH (opt-in role)
+    ├── git/                     # symlinks a repo-tracked ~/.gitconfig (opt-in role)
+    │   ├── files/gitconfig      # base .gitconfig, symlinked to ~/.gitconfig (git-tracked)
+    │   ├── tasks/main.yml
+    │   └── meta/main.yml
     └── zsh/                    # oh-my-zsh + symlinked ~/.zshrc (opt-in role)
         ├── files/zshrc         # base .zshrc, symlinked to ~/.zshrc (git-tracked)
         ├── defaults/main.yml
@@ -119,6 +123,8 @@ git-trackable). `~/.local/bin` is put on `PATH` by the `zsh` role.
 | `dotfiles check`   | Preview changes without applying (`--check --diff`)     |
 | `dotfiles secrets` | Pull secrets from Bitwarden (`bitwarden` role only)     |
 | `dotfiles update`  | Install/refresh Galaxy collections (`requirements.yml`) |
+| `dotfiles add-host`| Add this machine to the inventory + a host_vars file    |
+| `dotfiles commit`  | Secret-scan, then commit all changes (dated message)    |
 | `dotfiles edit`    | Open the repo in `$EDITOR`                              |
 | `dotfiles status`  | Show repo path, host and git working-tree status        |
 
@@ -138,6 +144,12 @@ variables tune it, all optional:
 - `DOTFILES_HOST` — inventory host (defaults to `$(hostname)`).
 - `DOTFILES_BECOME=none` — skip the sudo-password prompt, for NOPASSWD or
   headless/CI sudo (otherwise the prompt would hang an unattended run).
+- `DOTFILES_FAMILY` — `archlinux`/`debian`/`redhat`; overrides `add-host`'s OS-family detection.
+
+`dotfiles commit` stages everything, runs a secret scanner first when one is
+installed (`gitleaks`, else `git-secrets`), then commits with a generic
+`Update <date>` subject whose body is the `git status` changelog. The
+comprehensive `.gitignore` keeps fact caches and secret material out of the repo.
 
 ## Adding things
 
@@ -152,6 +164,10 @@ debian:
 ```
 
 Then, only if it deviates, create `inventory/host_vars/my-ubuntu-box.yml`.
+
+Or, on the new machine itself, run `dotfiles add-host`: it detects the OS family,
+adds the inventory entry (with `ansible_connection: local`), and scaffolds
+`inventory/host_vars/<hostname>.yml` with a starter `additional_roles` list.
 
 **A new distribution family** — add `inventory/group_vars/<family>.yml`, a
 matching `roles/common/vars/<OsFamily>.yml`, and a group in the inventory.
@@ -233,6 +249,12 @@ For **headless/CI** use, swap to Bitwarden Secrets Manager: the
   `git commit` to track shell config. A pre-existing real `~/.zshrc` is backed up
   to `~/.zshrc.pre-ansible` once. Machine-specific bits go in untracked
   `~/.zshrc.local`. (Assumes a local connection — the link targets this repo.)
+- **git role** (opt-in via `additional_roles`): **symlinks** `~/.gitconfig` →
+  `roles/git/files/gitconfig`. Editing that repo file (directly or through the
+  symlink) changes your live `~/.gitconfig`, so you can `git commit` to track
+  your Git config — set your `[user]` name/email there. A pre-existing real
+  `~/.gitconfig` is backed up to `~/.gitconfig.pre-ansible` once. (Assumes a
+  local connection — the link targets this repo.)
 - Linting uses `yamllint` + `ansible-lint` (configs in `.yamllint` /
   `.ansible-lint`); install them to run `make lint`.
 # dotfiles

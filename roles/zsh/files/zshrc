@@ -1,0 +1,32 @@
+# ~/.zshrc — managed by Ansible (roles/zsh/files/zshrc), symlinked to ~/.zshrc.
+# Edit this file (directly in the repo, or via the symlink) and commit to track
+# your shell configuration.
+
+# --- oh-my-zsh --------------------------------------------------------------
+export ZSH="$HOME/.oh-my-zsh"
+ZSH_THEME="robbyrussell"
+plugins=(git sudo fzf)
+[ -f "$ZSH/oh-my-zsh.sh" ] && source "$ZSH/oh-my-zsh.sh"
+
+# --- Environment ------------------------------------------------------------
+export EDITOR="nvim"
+export VISUAL="$EDITOR"
+
+# --- PATH -------------------------------------------------------------------
+# Ensure the user bin dir (where the `dotfiles` CLI is symlinked) is on PATH.
+case ":$PATH:" in
+  *":$HOME/.local/bin:"*) ;;
+  *) export PATH="$HOME/.local/bin:$PATH" ;;
+esac
+
+# --- Aliases (use the tools installed by the common role) -------------------
+if command -v eza >/dev/null 2>&1; then
+  alias ls='eza --group-directories-first'
+  alias ll='eza -lah --group-directories-first'
+  alias tree='eza --tree'
+fi
+command -v bat >/dev/null 2>&1 && alias cat='bat --paging=never'
+
+# --- Machine-specific, untracked overrides ----------------------------------
+# Put host-specific or secret bits here; this file is not tracked by the repo.
+[ -f "$HOME/.zshrc.local" ] && source "$HOME/.zshrc.local"

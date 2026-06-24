@@ -1,0 +1,9 @@
+---
+# Role-internal OS abstraction for the RedHat family (Fedora, RHEL, ...).
+# Auto-loaded by tasks/main.yml from ansible_facts['os_family'].
+__common_os_packages:
+  - "@Development Tools"   # dnf group: dnf group install "Development Tools"
+  - fd-find                # 'fd' on Arch
+  - gh                     # GitHub CLI (in Fedora repos; RHEL needs the gh dnf repo)
+  - which
+  - man-db

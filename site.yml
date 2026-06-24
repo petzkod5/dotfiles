@@ -1,0 +1,39 @@
+---
+# =============================================================================
+# site.yml — top-level playbook.
+# -----------------------------------------------------------------------------
+# Applies the shared baseline (the `common` role) to every host in inventory.
+# The role resolves per-family and per-host differences automatically through
+# the layered variables described in the README.
+#
+# Usage:
+#   ansible-playbook site.yml --ask-become-pass             # whole fleet
+#   ansible-playbook site.yml --limit petzko-lt-asus -K        # one host (+ extra roles)
+#   ansible-playbook site.yml --skip-tags additional_roles -K  # skip per-host extra roles
+# =============================================================================
+- name: Apply common baseline to all managed hosts
+  hosts: all
+  become: true
+  gather_facts: true
+  roles:
+    - role: common
+      tags:
+        - common
+
+- name: Apply additional per-host roles
+  hosts: all
+  become: false
+  gather_facts: true
+  tasks:
+    - name: Include roles declared in additional_roles
+      ansible.builtin.include_role:
+        name: "{{ additional_role }}"
+        apply:
+          tags:
+            - additional_roles
+            - "{{ additional_role }}"
+      loop: "{{ additional_roles | default([]) }}"
+      loop_control:
+        loop_var: additional_role
+      tags:
+        - additional_roles

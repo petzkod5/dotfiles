@@ -1,0 +1,31 @@
+---
+# Entry point for the common role.
+
+- name: Load OS-family specific variables
+  ansible.builtin.include_vars: "{{ _common_vars_file }}"
+  vars:
+    _common_vars_file: "{{ lookup('ansible.builtin.first_found', _common_ff) }}"
+    _common_ff:
+      files:
+        - "{{ ansible_facts['distribution'] }}.yml"
+        - "{{ ansible_facts['os_family'] }}.yml"
+      paths:
+        - "{{ role_path }}/vars"
+  tags:
+    - always
+
+- name: Configure packages
+  ansible.builtin.import_tasks: packages.yml
+  tags:
+    - packages
+
+- name: Configure base system
+  ansible.builtin.import_tasks: system.yml
+  tags:
+    - system
+
+- name: Configure Flatpak applications
+  ansible.builtin.import_tasks: flatpak.yml
+  when: common_manage_flatpak | bool
+  tags:
+    - flatpak

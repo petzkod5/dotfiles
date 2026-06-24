@@ -1,0 +1,22 @@
+# ~/.gitconfig — managed by Ansible (roles/git/files/gitconfig), symlinked to
+# ~/.gitconfig. Edit this file (directly in the repo, or via the symlink) and
+# commit to track your Git configuration.
+
+[user]
+	name = Dylan Petzko
+	email = petzkod@gmail.com
+
+[core]
+	editor = nvim
+
+[init]
+	defaultBranch = main
+
+[color]
+	ui = auto
+
+[alias]
+	st = status
+	co = checkout
+	br = branch
+	lg = log --oneline --graph --decorate

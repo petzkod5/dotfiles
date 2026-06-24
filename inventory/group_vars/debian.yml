@@ -1,0 +1,16 @@
+---
+# =============================================================================
+# FAMILY layer — Debian (Debian, Ubuntu, Pop!_OS, Mint).
+# Overrides group_vars/all; overridden by host_vars/<host>.
+# =============================================================================
+
+# Package names specific to the Debian family.
+common_packages_family:
+  - openssh-client
+  - software-properties-common
+  - apt-transport-https
+
+# Discord is not in the default Debian/Ubuntu repos -> install via Flatpak.
+common_flatpak_packages_family:
+  - name: com.discordapp.Discord
+    remote: flathub

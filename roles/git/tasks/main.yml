@@ -1,0 +1,44 @@
+---
+# Symlink a repo-tracked ~/.gitconfig for the login user. Runs as the user
+# (become: false, via the additional_roles play) and writes only inside the
+# user's home. Assumes a local connection so the symlink target (this repo)
+# exists on the machine. Edit roles/git/files/gitconfig (or ~/.gitconfig through
+# the symlink) and commit to track your Git config.
+
+- name: Identify the target user
+  ansible.builtin.command:
+    cmd: id -un
+  register: _git_user
+  changed_when: false
+  check_mode: false
+
+- name: Look up the target user's home directory
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ _git_user.stdout }}"
+
+- name: Resolve the home directory
+  ansible.builtin.set_fact:
+    git_home: "{{ ansible_facts.getent_passwd[_git_user.stdout][4] }}"
+
+- name: Check for an existing ~/.gitconfig
+  ansible.builtin.stat:
+    path: "{{ git_home }}/.gitconfig"
+  register: _git_rc
+
+- name: Back up a pre-existing real ~/.gitconfig (once)
+  ansible.builtin.copy:
+    src: "{{ git_home }}/.gitconfig"
+    dest: "{{ git_home }}/.gitconfig.pre-ansible"
+    remote_src: true
+    force: false
+  when:
+    - _git_rc.stat.exists
+    - not _git_rc.stat.islnk
+
+- name: Symlink ~/.gitconfig to the repo-tracked file
+  ansible.builtin.file:
+    src: "{{ role_path }}/files/gitconfig"
+    dest: "{{ git_home }}/.gitconfig"
+    state: link
+    force: true

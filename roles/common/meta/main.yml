@@ -1,0 +1,24 @@
+---
+galaxy_info:
+  role_name: common
+  namespace: petzko
+  author: petzko
+  description: Baseline configuration shared by all managed Linux hosts.
+  license: MIT
+  min_ansible_version: "2.15"
+  platforms:
+    - name: Archlinux
+      versions:
+        - all
+    - name: Ubuntu
+      versions:
+        - all
+    - name: Fedora
+      versions:
+        - all
+  galaxy_tags:
+    - system
+    - bootstrap
+    - workstation
+
+dependencies: []

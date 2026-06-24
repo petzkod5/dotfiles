@@ -1,0 +1,8 @@
+---
+# zsh role — install oh-my-zsh and symlink a repo-tracked ~/.zshrc.
+
+zsh_ohmyzsh_repo: "https://github.com/ohmyzsh/ohmyzsh.git"
+zsh_ohmyzsh_version: "master"
+# Clone once; do not auto-pull on every run (keeps the role idempotent).
+# Run `omz update` yourself to update oh-my-zsh.
+zsh_ohmyzsh_update: false

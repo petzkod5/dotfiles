@@ -1,0 +1,35 @@
+---
+# Flatpak applications. GUI apps that are not uniformly packaged across distros
+# (e.g. Discord) are delivered here so one app reference works everywhere.
+# Apps may come from Flathub or from a host-defined vendor/private remote.
+# This whole file is gated by `common_manage_flatpak` in tasks/main.yml.
+
+- name: Install flatpak
+  ansible.builtin.package:
+    name: flatpak
+    state: present
+
+- name: Enable Flatpak remotes
+  community.general.flatpak_remote:
+    name: "{{ item.name }}"
+    flatpakrepo_url: "{{ item.flatpakrepo_url }}"
+    method: system
+    state: present
+  loop: "{{ common_flatpak_remotes + common_flatpak_remotes_host }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Manage Flatpak applications
+  community.general.flatpak:
+    name: "{{ item.name }}"
+    remote: "{{ item.remote | default(common_flatpak_default_remote) }}"
+    method: system
+    state: "{{ item.state | default('present') }}"
+  loop: "{{ _common_flatpaks }}"
+  loop_control:
+    label: "{{ item.name }}"
+  vars:
+    _common_flatpaks: "{{ common_flatpak_packages
+                          + common_flatpak_packages_all
+                          + common_flatpak_packages_family
+                          + common_flatpak_packages_host }}"

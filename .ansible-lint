@@ -1,0 +1,10 @@
+---
+# ansible-lint configuration. Run with: make lint  (requires ansible-lint).
+profile: production
+
+exclude_paths:
+  - .ansible_cache/
+  - collections/
+  - .github/
+
+use_default_rules: true

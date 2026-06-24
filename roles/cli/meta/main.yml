@@ -1,0 +1,23 @@
+---
+galaxy_info:
+  role_name: cli
+  namespace: petzko
+  author: petzko
+  description: "Symlink the dotfiles management CLI onto PATH."
+  license: MIT
+  min_ansible_version: "2.15"
+  platforms:
+    - name: Archlinux
+      versions:
+        - all
+    - name: Ubuntu
+      versions:
+        - all
+    - name: Fedora
+      versions:
+        - all
+  galaxy_tags:
+    - cli
+    - dotfiles
+
+dependencies: []

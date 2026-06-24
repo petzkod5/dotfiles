@@ -1,0 +1,18 @@
+---
+galaxy_info:
+  role_name: bitwarden
+  namespace: petzko
+  author: petzko
+  description: Pull SSH keys and files from a Bitwarden vault onto a host.
+  license: MIT
+  min_ansible_version: "2.15"
+  platforms:
+    - name: Archlinux
+      versions:
+        - all
+  galaxy_tags:
+    - secrets
+    - bitwarden
+    - ssh
+
+dependencies: []

@@ -1,0 +1,56 @@
+---
+# =============================================================================
+# HOST layer — petzko-lt-asus (CachyOS laptop).
+# Highest-precedence layer: these values win over family and common layers.
+# This file is where this specific machine deviates from the baseline.
+# =============================================================================
+
+# --- Deviations from the common defaults ------------------------------------
+common_timezone: "America/New_York"    # EST/EDT; overrides the UTC default
+
+# Enforce the system hostname. This matches the machine's live /etc/hostname,
+# so the task is idempotent (it keeps the name pinned to petzko-lt-asus).
+common_manage_hostname: true
+common_hostname: "petzko-lt-asus"
+
+# --- Packages unique to this laptop (Arch names) ----------------------------
+# base-devel, neovim, zsh, fzf, fd and bat now come from the common/family
+# layers, so they are intentionally not repeated here.
+common_packages_host:
+  - ripgrep
+  - docker
+  - docker-compose
+
+# --- Flatpak apps unique to this laptop -------------------------------------
+# Bitwarden desktop — official, publisher-verified Flathub app (GPL-3.0).
+# Ships from the default flathub remote, so no custom remote is needed.
+common_flatpak_packages_host:
+  - name: com.bitwarden.desktop
+    remote: flathub
+
+# Extra roles run for this host by site.yml (beyond the common baseline).
+additional_roles:
+  - bitwarden
+  - zsh
+  - cli
+  - git
+
+# --- Secrets from Bitwarden (bitwarden role: via additional_roles or `dotfiles secrets`)
+# Credentials are prompted at runtime (see README); these lists declare what to
+# pull. Examples (uncomment / adjust to your vault items):
+# bitwarden_files:                       # item ATTACHMENTS -> files
+#   - item: "work-vpn"
+#     attachment: "client.ovpn"
+#     dest: "{{ bitwarden_home }}/.config/vpn/client.ovpn"
+#     mode: "0600"
+# bitwarden_notes:                       # Secure Note BODY -> file (e.g. SOPS age key)
+#   - item: "sops-age-key"
+#     dest: "{{ bitwarden_home }}/.config/sops/age/keys.txt"
+#     mode: "0600"
+bitwarden_ssh_keys:
+  - item: "petzkod Github"
+    dest: "{{ bitwarden_ssh_dir }}/id_ed25519"
+bitwarden_notes:
+  - item: "sops-age-pgp-key"
+    dest: "{{ bitwarden_home }}/.config/sops/age/keys.txt"
+    mode: "0600"

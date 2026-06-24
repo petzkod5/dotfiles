@@ -1,0 +1,70 @@
+---
+# =============================================================================
+# common role — default variables (LOWEST precedence).
+# -----------------------------------------------------------------------------
+# Safe, distro-agnostic baselines. Override via (low -> high):
+#   group_vars/all  ->  group_vars/<family>  ->  host_vars/<host>
+# =============================================================================
+
+# --- Identity ---------------------------------------------------------------
+common_manage_hostname: false
+common_hostname: "{{ inventory_hostname }}"
+
+# --- Localisation -----------------------------------------------------------
+common_timezone: "UTC"
+common_manage_locale: false
+common_locale: "en_US.UTF-8"
+
+# --- User shell -------------------------------------------------------------
+# Set the login user's default shell (zsh is installed by the package step).
+# Disable per host/group with common_manage_user_shell: false.
+common_manage_user_shell: true
+common_user_shell: "/usr/bin/zsh"
+
+# --- Packages ---------------------------------------------------------------
+# Baseline tools whose package name is identical across Arch, Debian/Ubuntu
+# and RedHat/Fedora. Family-specific names are added by the family layer; the
+# per-family role internals live in roles/common/vars/<os_family>.yml.
+common_packages:
+  - git
+  - curl
+  - wget
+  - vim
+  - tmux
+  - htop
+  - rsync
+  - unzip
+  - tree
+  - jq
+  - zsh
+  - neovim
+  - fzf
+  - bat
+  - eza
+
+# Additive layer buckets — each configuration layer fills exactly one.
+# The role installs the concatenation of all of them.
+common_packages_all: []      # set in group_vars/all
+common_packages_family: []   # set in group_vars/<family>
+common_packages_host: []     # set in host_vars/<host>
+
+# --- Flatpak ----------------------------------------------------------------
+# Cross-distro GUI apps are delivered via Flatpak so a single app reference
+# works on every family (e.g. Discord, absent from default Debian/Fedora repos).
+# Set common_manage_flatpak: false on a host that must not use it.
+common_manage_flatpak: true
+
+# Remotes to enable. Each entry: {name, flatpakrepo_url}. Hosts add private or
+# vendor remotes via common_flatpak_remotes_host.
+common_flatpak_default_remote: "flathub"
+common_flatpak_remotes:
+  - name: flathub
+    flatpakrepo_url: "https://dl.flathub.org/repo/flathub.flatpakrepo"
+common_flatpak_remotes_host: []     # extra remotes for a single host
+
+# Applications to install. Each entry: {name, remote} where remote is optional
+# and defaults to common_flatpak_default_remote. Each layer fills one bucket.
+common_flatpak_packages: []         # role baseline
+common_flatpak_packages_all: []     # set in group_vars/all
+common_flatpak_packages_family: []  # set in group_vars/<family>
+common_flatpak_packages_host: []    # set in host_vars/<host>

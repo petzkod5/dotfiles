@@ -1,0 +1,270 @@
+---
+# Pull secrets from Bitwarden. Secret values use no_log; credential prompts use
+# `pause` with echo:false (input hidden, prompt visible). `bw` runs via argv.
+#
+# client_id/client_secret are only needed to log in. When the CLI is already
+# authenticated (status != 'unauthenticated') login is skipped, so they are
+# neither prompted for nor required — only the master password (to unlock).
+
+- name: Install the Bitwarden CLI
+  ansible.builtin.package:
+    name: "{{ bitwarden_cli_package }}"
+    state: present
+  become: true
+
+- name: Read Bitwarden auth status
+  ansible.builtin.command:
+    argv: [bw, status]
+  register: _bw_status
+  changed_when: false
+  no_log: true
+
+- name: Record whether a login is required
+  ansible.builtin.set_fact:
+    _bw_need_login: "{{ (_bw_status.stdout | from_json).status == 'unauthenticated' }}"
+
+- name: Point the CLI at the configured server
+  ansible.builtin.command:
+    argv: [bw, config, server, "{{ bitwarden_server }}"]
+  register: _bw_cfg
+  changed_when: true
+  when: >-
+    ((_bw_status.stdout | from_json).serverUrl | default('') | regex_replace('/$', ''))
+    != (bitwarden_server | regex_replace('/$', ''))
+
+# ---- Log in (only when not already authenticated) -------------------------
+- name: Prompt for the Bitwarden API client_id
+  ansible.builtin.pause:
+    prompt: "Bitwarden API client_id (looks like user.xxxxxxxx-...)"
+    echo: true
+  register: _bw_cid
+  when:
+    - _bw_need_login | bool
+    - bitwarden_client_id | default('') | length == 0
+
+- name: Prompt for the Bitwarden API client_secret
+  ansible.builtin.pause:
+    prompt: "Bitwarden API client_secret"
+    echo: false
+  register: _bw_csec
+  when:
+    - _bw_need_login | bool
+    - bitwarden_client_secret | default('') | length == 0
+
+- name: Resolve API credentials from prompts (or pre-supplied vars)
+  ansible.builtin.set_fact:
+    bitwarden_client_id: "{{ _bw_cid.user_input | default(bitwarden_client_id | default('')) }}"
+    bitwarden_client_secret: "{{ _bw_csec.user_input | default(bitwarden_client_secret | default('')) }}"
+  when: _bw_need_login | bool
+  no_log: true
+
+- name: Validate API credentials are available for login
+  ansible.builtin.assert:
+    that:
+      - bitwarden_client_id | default('') | length > 0
+      - bitwarden_client_secret | default('') | length > 0
+    fail_msg: >-
+      Not logged in and no API key supplied. Provide bitwarden_client_id /
+      bitwarden_client_secret (prompted, or via -e), or run `bw login` first.
+    quiet: true
+  when: _bw_need_login | bool
+
+- name: Log in with the API key
+  ansible.builtin.command:
+    argv: [bw, login, "--apikey"]
+  environment:
+    BW_CLIENTID: "{{ bitwarden_client_id }}"
+    BW_CLIENTSECRET: "{{ bitwarden_client_secret }}"
+  register: _bw_login
+  changed_when: true
+  no_log: true
+  when: _bw_need_login | bool
+
+# ---- Unlock (always needed to obtain a session key) -----------------------
+- name: Prompt for the Bitwarden master password
+  ansible.builtin.pause:
+    prompt: "Bitwarden master password"
+    echo: false
+  register: _bw_mpw
+  when: bitwarden_master_password | default('') | length == 0
+
+- name: Resolve master password from prompt (or pre-supplied var)
+  ansible.builtin.set_fact:
+    bitwarden_master_password: "{{ _bw_mpw.user_input | default(bitwarden_master_password | default('')) }}"
+  no_log: true
+
+- name: Validate the master password is available
+  ansible.builtin.assert:
+    that:
+      - bitwarden_master_password | default('') | length > 0
+    fail_msg: "The Bitwarden master password is required to unlock the vault."
+    quiet: true
+
+- name: Unlock the vault
+  ansible.builtin.command:
+    argv: [bw, unlock, "--passwordenv", "BW_PASSWORD", "--raw"]
+  environment:
+    BW_PASSWORD: "{{ bitwarden_master_password }}"
+  register: _bw_unlock
+  changed_when: false
+  no_log: true
+
+- name: Capture the unlocked session
+  ansible.builtin.set_fact:
+    _bw_session: "{{ _bw_unlock.stdout }}"
+  no_log: true
+
+- name: Sync the vault
+  ansible.builtin.command:
+    argv: [bw, sync]
+  environment:
+    BW_SESSION: "{{ _bw_session }}"
+  changed_when: false
+  no_log: true
+
+# Resolve the home directory of the user we actually run as (become: false).
+# ansible_env.HOME can be root's when facts were gathered under become, so query
+# passwd directly for the real user instead.
+- name: Identify the target user
+  ansible.builtin.command:
+    cmd: id -un
+  register: _bw_user
+  changed_when: false
+
+- name: Look up the target user's home directory
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ _bw_user.stdout }}"
+
+- name: Resolve the home directory fact
+  ansible.builtin.set_fact:
+    bitwarden_home: "{{ ansible_facts.getent_passwd[_bw_user.stdout][4] }}"
+
+# ---- SSH keys --------------------------------------------------------------
+- name: Ensure the SSH directory exists
+  ansible.builtin.file:
+    path: "{{ bitwarden_ssh_dir }}"
+    state: directory
+    mode: "0700"
+  when: bitwarden_ssh_keys | length > 0
+
+- name: Fetch SSH key items
+  ansible.builtin.command:
+    argv: [bw, get, item, "{{ item.item }}"]
+  environment:
+    BW_SESSION: "{{ _bw_session }}"
+  register: _bw_ssh_items
+  changed_when: false
+  no_log: true
+  loop: "{{ bitwarden_ssh_keys }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: Write SSH private keys
+  ansible.builtin.copy:
+    content: "{{ (item.0.stdout | from_json).sshKey.privateKey | trim }}\n"
+    dest: "{{ item.1.dest }}"
+    mode: "0600"
+  loop: "{{ (_bw_ssh_items.results | default([])) | zip(bitwarden_ssh_keys) | list }}"
+  loop_control:
+    label: "{{ item.1.dest }}"
+  no_log: true
+
+- name: Write SSH public keys
+  ansible.builtin.copy:
+    content: "{{ (item.0.stdout | from_json).sshKey.publicKey | trim }}\n"
+    dest: "{{ item.1.dest }}.pub"
+    mode: "0644"
+  loop: "{{ (_bw_ssh_items.results | default([])) | zip(bitwarden_ssh_keys) | list }}"
+  loop_control:
+    label: "{{ item.1.dest }}.pub"
+  no_log: true
+
+# ---- Secure notes (note body -> file) -------------------------------------
+- name: Fetch secure-note items
+  ansible.builtin.command:
+    argv: [bw, get, item, "{{ item.item }}"]
+  environment:
+    BW_SESSION: "{{ _bw_session }}"
+  register: _bw_note_items
+  changed_when: false
+  no_log: true
+  loop: "{{ bitwarden_notes }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: Ensure secure-note destination directories exist
+  ansible.builtin.file:
+    path: "{{ item.dest | dirname }}"
+    state: directory
+    mode: "0700"
+  loop: "{{ bitwarden_notes }}"
+  loop_control:
+    label: "{{ item.dest | dirname }}"
+
+- name: Write secure notes to files
+  ansible.builtin.copy:
+    content: "{{ (item.0.stdout | from_json).notes | trim }}\n"
+    dest: "{{ item.1.dest }}"
+    mode: "{{ item.1.mode | default('0600') }}"
+  loop: "{{ (_bw_note_items.results | default([])) | zip(bitwarden_notes) | list }}"
+  loop_control:
+    label: "{{ item.1.dest }}"
+  no_log: true
+
+# ---- File attachments ------------------------------------------------------
+- name: Fetch attachment item metadata
+  ansible.builtin.command:
+    argv: [bw, get, item, "{{ item.item }}"]
+  environment:
+    BW_SESSION: "{{ _bw_session }}"
+  register: _bw_file_items
+  changed_when: false
+  no_log: true
+  loop: "{{ bitwarden_files }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: Ensure attachment destination directories exist
+  ansible.builtin.file:
+    path: "{{ item.dest | dirname }}"
+    state: directory
+    mode: "0700"
+  loop: "{{ bitwarden_files }}"
+  loop_control:
+    label: "{{ item.dest | dirname }}"
+
+- name: Download attachments
+  ansible.builtin.command:
+    argv:
+      - bw
+      - get
+      - attachment
+      - "{{ item.1.attachment }}"
+      - "--itemid"
+      - "{{ (item.0.stdout | from_json).id }}"
+      - "--output"
+      - "{{ item.1.dest }}"
+    creates: "{{ item.1.dest }}"
+  environment:
+    BW_SESSION: "{{ _bw_session }}"
+  loop: "{{ (_bw_file_items.results | default([])) | zip(bitwarden_files) | list }}"
+  loop_control:
+    label: "{{ item.1.dest }}"
+  no_log: true
+
+- name: Enforce attachment permissions
+  ansible.builtin.file:
+    path: "{{ item.dest }}"
+    mode: "{{ item.mode | default('0600') }}"
+  loop: "{{ bitwarden_files }}"
+  loop_control:
+    label: "{{ item.dest }}"
+
+# ---- Cleanup ---------------------------------------------------------------
+- name: Lock the vault
+  ansible.builtin.command:
+    argv: [bw, lock]
+  changed_when: false
+  no_log: true
+  when: bitwarden_lock_when_done | bool

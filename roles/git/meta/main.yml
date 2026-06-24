@@ -1,0 +1,23 @@
+---
+galaxy_info:
+  role_name: git
+  namespace: petzko
+  author: petzko
+  description: "Symlink a repo-tracked ~/.gitconfig for the login user."
+  license: MIT
+  min_ansible_version: "2.15"
+  platforms:
+    - name: Archlinux
+      versions:
+        - all
+    - name: Ubuntu
+      versions:
+        - all
+    - name: Fedora
+      versions:
+        - all
+  galaxy_tags:
+    - git
+    - dotfiles
+
+dependencies: []

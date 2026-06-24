@@ -1,0 +1,51 @@
+---
+# Install oh-my-zsh for the login user and symlink a repo-tracked ~/.zshrc.
+# Runs as the user (become: false, via the additional_roles play) and writes
+# only inside the user's home. Assumes a local connection so the symlink target
+# (this repository) exists on the machine.
+
+- name: Identify the target user
+  ansible.builtin.command:
+    cmd: id -un
+  register: _zsh_user
+  changed_when: false
+  check_mode: false
+
+- name: Look up the target user's home directory
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ _zsh_user.stdout }}"
+
+- name: Resolve the home directory
+  ansible.builtin.set_fact:
+    zsh_home: "{{ ansible_facts.getent_passwd[_zsh_user.stdout][4] }}"
+
+- name: Clone oh-my-zsh
+  ansible.builtin.git:
+    repo: "{{ zsh_ohmyzsh_repo }}"
+    dest: "{{ zsh_home }}/.oh-my-zsh"
+    version: "{{ zsh_ohmyzsh_version }}"
+    depth: 1
+    update: "{{ zsh_ohmyzsh_update | bool }}"
+
+- name: Check for an existing ~/.zshrc
+  ansible.builtin.stat:
+    path: "{{ zsh_home }}/.zshrc"
+  register: _zsh_rc
+
+- name: Back up a pre-existing real ~/.zshrc (once)
+  ansible.builtin.copy:
+    src: "{{ zsh_home }}/.zshrc"
+    dest: "{{ zsh_home }}/.zshrc.pre-ansible"
+    remote_src: true
+    force: false
+  when:
+    - _zsh_rc.stat.exists
+    - not _zsh_rc.stat.islnk
+
+- name: Symlink ~/.zshrc to the repo-tracked file
+  ansible.builtin.file:
+    src: "{{ role_path }}/files/zshrc"
+    dest: "{{ zsh_home }}/.zshrc"
+    state: link
+    force: true

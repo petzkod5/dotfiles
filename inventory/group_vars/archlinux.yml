@@ -1,0 +1,19 @@
+---
+# =============================================================================
+# FAMILY layer — Archlinux (Arch, CachyOS, Manjaro, EndeavourOS).
+# Overrides group_vars/all; overridden by host_vars/<host>.
+# =============================================================================
+
+# Package names specific to the Arch family.
+common_packages_family:
+  - openssh
+  - pacman-contrib   # paccache, checkupdates, ...
+  - reflector        # rank/refresh mirror lists
+  - discord          # native package (preferred over the Flathub build)
+
+# Discord is native on Arch, so ensure the Flathub variant is NOT installed.
+# This removes the duplicate if an earlier run added the Flatpak.
+common_flatpak_packages_family:
+  - name: com.discordapp.Discord
+    remote: flathub
+    state: absent

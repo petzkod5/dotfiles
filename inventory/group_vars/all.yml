@@ -1,0 +1,32 @@
+---
+# =============================================================================
+# COMMON layer — applies to every managed host, on every distribution.
+# -----------------------------------------------------------------------------
+# Precedence (low -> high):
+#   role defaults  <  group_vars/all  <  group_vars/<family>  <  host_vars/<host>
+#
+# Scalars (timezone, locale, flags) are *overridden* by higher layers.
+# Package lists *accumulate*: each layer fills its own bucket
+#   common_packages         (role baseline, identical names everywhere)
+#   common_packages_all     (this file — fleet-wide additions)
+#   common_packages_family  (group_vars/<family> — per-distro names)
+#   common_packages_host    (host_vars/<host> — per-machine additions)
+# =============================================================================
+
+# --- Localisation -----------------------------------------------------------
+common_timezone: "UTC"
+common_manage_locale: true
+common_locale: "en_US.UTF-8"
+
+# --- Identity ---------------------------------------------------------------
+# Off by default so a run never renames a machine unexpectedly.
+common_manage_hostname: false
+
+# --- Packages every machine should carry (names valid on all families) ------
+common_packages_all:
+  - ca-certificates
+
+# --- Extra per-host roles ---------------------------------------------------
+# Roles site.yml runs in addition to `common`. Empty fleet-wide; a host opts in
+# by setting its own list in host_vars (see petzko-lt-asus -> bitwarden).
+additional_roles: []

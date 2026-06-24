@@ -1,0 +1,12 @@
+---
+# Role-internal OS abstraction for the Archlinux family (Arch, CachyOS, ...).
+# Auto-loaded by tasks/main.yml from ansible_facts['os_family'].
+# NOT intended to be overridden per host — per-host additions go in
+# common_packages_host. These are packages every Arch box should always carry.
+__common_os_packages:
+  - base-devel    # dev toolchain meta-package (gcc, make, ...)
+  - fd            # 'fd-find' on Debian/RedHat
+  - which
+  - man-db
+  - pkgfile
+  - github-cli    # GitHub CLI ('gh'); 'gh' on Debian/RedHat
