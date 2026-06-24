@@ -28,6 +28,7 @@ credentials.yml
 *.creds
 .env
 .env.*
+secrets.env
 # Private keys and key-bearing material
 *.pem
 *.key

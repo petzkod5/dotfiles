@@ -10,6 +10,7 @@ common_packages_family:
   - pacman-contrib   # paccache, checkupdates, ...
   - reflector        # rank/refresh mirror lists
   - discord          # native package (preferred over the Flathub build)
+  - gitleaks         # secret scanner used by 'dotfiles commit'
 
 # Discord is native on Arch, so ensure the Flathub variant is NOT installed.
 # This removes the duplicate if an earlier run added the Flatpak.

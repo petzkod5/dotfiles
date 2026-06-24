@@ -27,15 +27,57 @@ command -v ansible-playbook >/dev/null 2>&1 \
 [ -f "${DOTFILES_DIR}/site.yml" ] \
   || die "site.yml not found in ${DOTFILES_DIR} (set DOTFILES_DIR to the repo)."
 
-# Become (sudo) password. Ansible runs sudo with -n, so if a password is needed
-# and none was supplied the run dies mid-play with no chance to type it. A probe
-# like `sudo -n true` is unreliable: it also succeeds on a *cached* timestamp
-# that may expire before Ansible escalates. So prompt by default; opt out only
-# for genuine NOPASSWD / headless sudo with DOTFILES_BECOME=none (no|0).
+# --- configuration ----------------------------------------------------------
+# Optional TOML config at ~/.config/dotfiles/config.toml (override path with
+# DOTFILES_CONFIG). Precedence: environment variable > config file > default.
+# Parsed with Python's stdlib tomllib (needs Python >= 3.11); `dotfiles config`
+# scaffolds and opens it.
+DOTFILES_CONFIG="${DOTFILES_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/config.toml}"
+declare -A _cfg=()
+if [ -f "$DOTFILES_CONFIG" ]; then
+  _cfgpy="$(command -v python3 || command -v python || true)"
+  if [ -n "$_cfgpy" ]; then
+    while IFS= read -r -d '' _k && IFS= read -r -d '' _v; do _cfg["$_k"]="$_v"; done \
+      < <("$_cfgpy" - "$DOTFILES_CONFIG" <<'PY'
+import sys
+try:
+    import tomllib
+except ModuleNotFoundError:
+    sys.stderr.write("dotfiles: config needs Python >= 3.11 (tomllib); ignoring it\n"); sys.exit(0)
+try:
+    with open(sys.argv[1], "rb") as fh:
+        data = tomllib.load(fh)
+except Exception as exc:
+    sys.stderr.write("dotfiles: invalid config (%s); ignoring it\n" % exc); sys.exit(0)
+def walk(prefix, d):
+    for k, v in d.items():
+        key = prefix + k
+        if isinstance(v, dict):
+            walk(key + ".", v)
+        else:
+            sys.stdout.write(key + "\0" + ("" if v is None else str(v)) + "\0")
+walk("", data)
+PY
+    )
+  fi
+fi
+cfg()  { printf '%s' "${_cfg[$1]:-}"; }
+pick() { local e="$1" c; c="$(cfg "$2")"; printf '%s' "${e:-${c:-$3}}"; }
+
+_default_prompt="Commit the changes in this dotfiles repository. Ensure you check for secrets before committing. You must run gitleaks before committing. The commit message should follow conventionalcommits standards and be a general synopsis of the changes."
+
+# Settings: environment variable > config file > built-in default.
+DOTFILES_BECOME="$(pick "${DOTFILES_BECOME:-}" sync.become "")"
+OPENROUTER_API_KEY="$(pick "${OPENROUTER_API_KEY:-}" commit.api_key "")"
+OPENROUTER_MODEL="$(pick "${OPENROUTER_MODEL:-}" commit.model openai/gpt-4o-mini)"
+OPENROUTER_URL="$(pick "${OPENROUTER_URL:-}" commit.url https://openrouter.ai/api/v1/chat/completions)"
+DOTFILES_COMMIT_PROMPT="$(pick "${DOTFILES_COMMIT_PROMPT:-}" commit.prompt "$_default_prompt")"
+
+# Become (sudo) password — prompt by default. Ansible runs sudo with -n, so a
+# needed-but-missing password kills the run mid-play. Set become=none (config
+# sync.become, or DOTFILES_BECOME) only for genuine NOPASSWD / headless sudo.
 become=(--ask-become-pass)
-case "${DOTFILES_BECOME:-}" in
-  none|no|0) become=() ;;
-esac
+case "$DOTFILES_BECOME" in none|no|0) become=() ;; esac
 
 play() {  # play <playbook> [extra ansible-playbook args...]
   local pb="$1"; shift
@@ -149,6 +191,41 @@ scan_secrets() {  # run the first available well-known secret scanner on staged 
   fi
 }
 
+llm_commit_message() {  # print an LLM commit message from the staged diff, or fail
+  local py; py="$(command -v python3 || command -v python)" || return 1
+  local diff
+  diff="$( { git diff --cached --stat; echo; git diff --cached; } 2>/dev/null | head -c 12000 || true )"
+  OR_KEY="${OPENROUTER_API_KEY:-}" OR_MODEL="$OPENROUTER_MODEL" OR_URL="$OPENROUTER_URL" \
+  OR_PROMPT="$DOTFILES_COMMIT_PROMPT" OR_DIFF="$diff" "$py" - <<'PY'
+import json, os, sys, urllib.request
+payload = json.dumps({
+    "model": os.environ["OR_MODEL"],
+    "messages": [
+        {"role": "system", "content":
+            "You write git commit messages for a dotfiles repository. "
+            "Reply with ONLY the commit message text — no preamble, no code fences."},
+        {"role": "user", "content":
+            os.environ["OR_PROMPT"] + "\n\nStaged changes:\n\n" + os.environ["OR_DIFF"]},
+    ],
+})
+req = urllib.request.Request(
+    os.environ["OR_URL"], data=payload.encode(),
+    headers={"Authorization": "Bearer " + os.environ["OR_KEY"],
+             "Content-Type": "application/json",
+             "X-Title": "dotfiles commit"},
+)
+try:
+    with urllib.request.urlopen(req, timeout=60) as resp:
+        msg = json.load(resp)["choices"][0]["message"]["content"].strip()
+except Exception as exc:
+    sys.stderr.write("openrouter: %s\n" % exc)
+    sys.exit(1)
+if not msg:
+    sys.exit(1)
+print(msg)
+PY
+}
+
 do_commit() {  # commit — stage all changes, scan for secrets, commit with a dated message
   command -v git >/dev/null 2>&1 || die "git not found."
   cd "$DOTFILES_DIR" || die "cannot enter ${DOTFILES_DIR}."
@@ -165,11 +242,46 @@ do_commit() {  # commit — stage all changes, scan for secrets, commit with a d
 
   scan_secrets   # aborts the commit if a scanner flags a secret
 
-  local stamp changelog
+  local stamp msg=""
   stamp="$(date '+%Y-%m-%d %H:%M')"
-  changelog="$(git status --short)"
-  git commit --quiet -m "Update ${stamp}" -m "${changelog}"
-  say "Committed 'Update ${stamp}'"
+  if [ -n "${OPENROUTER_API_KEY:-}" ]; then
+    say "  generating a commit message via OpenRouter (${OPENROUTER_MODEL})"
+    msg="$(llm_commit_message)" || { warn "  OpenRouter call failed — using the generic message"; msg=""; }
+  fi
+  if [ -n "$msg" ]; then
+    git commit --quiet -F - <<<"$msg"
+    say "Committed (LLM-generated message)"
+  else
+    git commit --quiet -m "Update ${stamp}" -m "$(git status --short)"
+    say "Committed 'Update ${stamp}'"
+  fi
+}
+
+ensure_config() {  # create the config (commented template) if it does not exist
+  [ -f "$DOTFILES_CONFIG" ] && return 0
+  mkdir -p "$(dirname "$DOTFILES_CONFIG")"
+  cat > "$DOTFILES_CONFIG" <<'EOF'
+# dotfiles config (TOML). Values here override built-in defaults; a matching
+# environment variable still overrides this file. Needs Python >= 3.11.
+
+[commit]
+# LLM-generated commit messages for `dotfiles commit` (active once an API key is
+# set — prefer the OPENROUTER_API_KEY env var or a Bitwarden note for the key).
+# model   = "openai/gpt-4o-mini"
+# url     = "https://openrouter.ai/api/v1/chat/completions"
+# api_key = "sk-or-..."
+# prompt  = """
+# Commit the changes in this dotfiles repository. Ensure you check for secrets
+# before committing. You must run gitleaks before committing. The commit message
+# should follow conventionalcommits standards and be a general synopsis of the
+# changes.
+# """
+
+[sync]
+# become = "none"   # skip the sudo-password prompt (NOPASSWD / headless sudo)
+EOF
+  chmod 600 "$DOTFILES_CONFIG"
+  say "Created ${DOTFILES_CONFIG}"
 }
 
 usage() {
@@ -184,8 +296,9 @@ ${b}Commands:${n}
   secrets   Pull secrets from Bitwarden (bitwarden role only)
   update    Install/refresh Galaxy collections (requirements.yml)
   add-host  Register this machine (or HOST) in the inventory + host_vars
-  commit    Stage all changes, scan for secrets, commit with a dated message
+  commit    Stage, secret-scan, then commit (LLM message if OPENROUTER_API_KEY set)
   edit      Open the repo in \$EDITOR
+  config    Create/edit ~/.config/dotfiles/config.toml (prompt, model, become)
   status    Show repo path, host and git working-tree status
   help      Show this help
 
@@ -197,6 +310,9 @@ Extra args pass through to ansible-playbook, e.g.:
 Env: DOTFILES_DIR (repo, auto-detected) · DOTFILES_HOST (default: \$(hostname))
      DOTFILES_BECOME=none to skip the sudo-password prompt (NOPASSWD/headless)
      DOTFILES_FAMILY=archlinux|debian|redhat to override add-host detection
+     OPENROUTER_API_KEY enables an LLM commit message for 'commit';
+       OPENROUTER_MODEL (default openai/gpt-4o-mini) + DOTFILES_COMMIT_PROMPT tune it
+     Any of the above can live in ~/.config/dotfiles/config.toml — 'dotfiles config'
 EOF
 }
 
@@ -212,6 +328,7 @@ case "$cmd" in
                    ( cd "$DOTFILES_DIR" && ansible-galaxy collection install -r requirements.yml "$@" ) ;;
   add-host)        add_host "$@" ;;
   commit)          do_commit "$@" ;;
+  config)          ensure_config; say "config: ${DOTFILES_CONFIG}"; ( exec "${EDITOR:-vi}" "$DOTFILES_CONFIG" ) ;;
   edit)            ( cd "$DOTFILES_DIR" && exec "${EDITOR:-vi}" . ) ;;
   status)          printf '%srepo%s %s\n%shost%s %s\n' "$b" "$n" "$DOTFILES_DIR" "$b" "$n" "$HOST"
                    git -C "$DOTFILES_DIR" status -sb ;;

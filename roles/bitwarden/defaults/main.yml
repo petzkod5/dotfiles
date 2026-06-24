@@ -38,6 +38,17 @@ bitwarden_files: []
 #   mode: file mode (default '0600')
 bitwarden_notes: []
 
+# --- Environment-variable secure notes --------------------------------------
+# A personal-vault stand-in for Bitwarden Secrets Manager. Every Secure Note in
+# the `bitwarden_env_folder` becomes ONE exported environment variable: the note
+# NAME is the variable name and the note BODY is its value. They are written to
+# `bitwarden_env_file` (mode 0600, never committed) and exported into your shell
+# by a loader dropped in ~/.config/zsh/rc.d/ (sourced by the zsh role's .zshrc).
+# Note names must be valid shell identifiers ([A-Za-z_][A-Za-z0-9_]*); any other
+# note in the folder is skipped. Set bitwarden_env_folder: "" to disable.
+bitwarden_env_folder: "environment-variables"
+bitwarden_env_file: "{{ bitwarden_home }}/.config/zsh/secrets.env"
+
 # --- Credentials ------------------------------------------------------------
 # bitwarden_client_id / bitwarden_client_secret: API key, only needed to LOG IN.
 #   Skipped entirely when the CLI is already authenticated. Prompted when needed,

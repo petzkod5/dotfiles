@@ -27,6 +27,14 @@ if command -v eza >/dev/null 2>&1; then
 fi
 command -v bat >/dev/null 2>&1 && alias cat='bat --paging=never'
 
+# --- Sourced fragments (drop-in shell config from roles, e.g. neovim) -------
+if [ -d "$HOME/.config/zsh/rc.d" ]; then
+  for _rc in "$HOME"/.config/zsh/rc.d/*.zsh; do
+    [ -r "$_rc" ] && source "$_rc"
+  done
+  unset _rc
+fi
+
 # --- Machine-specific, untracked overrides ----------------------------------
 # Put host-specific or secret bits here; this file is not tracked by the repo.
 [ -f "$HOME/.zshrc.local" ] && source "$HOME/.zshrc.local"

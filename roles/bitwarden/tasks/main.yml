@@ -261,6 +261,65 @@
   loop_control:
     label: "{{ item.dest }}"
 
+# ---- Environment-variable secure notes -> secrets.env ----------------------
+- name: List Bitwarden folders
+  ansible.builtin.command:
+    argv: [bw, list, folders]
+  environment:
+    BW_SESSION: "{{ _bw_session }}"
+  register: _bw_folders
+  changed_when: false
+  no_log: true
+  when: bitwarden_env_folder | length > 0
+
+- name: Resolve the environment-variables folder id
+  ansible.builtin.set_fact:
+    _bw_env_folder_id: "{{ ((_bw_folders.stdout | from_json | selectattr('name', 'equalto', bitwarden_env_folder) | map(attribute='id') | list) + ['']) | first }}"
+  no_log: true
+  when: bitwarden_env_folder | length > 0
+
+- name: Ensure the shell rc.d directory exists
+  ansible.builtin.file:
+    path: "{{ bitwarden_env_file | dirname }}/rc.d"
+    state: directory
+    mode: "0755"
+  when: bitwarden_env_folder | length > 0
+
+- name: Install the loader that exports the secrets env file into the shell
+  ansible.builtin.template:
+    src: secrets-env.zsh.j2
+    dest: "{{ bitwarden_env_file | dirname }}/rc.d/secrets-env.zsh"
+    mode: "0644"
+  when: bitwarden_env_folder | length > 0
+
+- name: Fetch the secure notes from the environment-variables folder
+  ansible.builtin.command:
+    argv: [bw, list, items, --folderid, "{{ _bw_env_folder_id }}"]
+  environment:
+    BW_SESSION: "{{ _bw_session }}"
+  register: _bw_env_items
+  changed_when: false
+  no_log: true
+  when:
+    - bitwarden_env_folder | length > 0
+    - _bw_env_folder_id | length > 0
+
+- name: Write the secrets environment file (note name = variable, body = value)
+  ansible.builtin.copy:
+    dest: "{{ bitwarden_env_file }}"
+    mode: "0600"
+    content: |
+      # Managed by the bitwarden role — environment variables pulled from the
+      # '{{ bitwarden_env_folder }}' Bitwarden folder. DO NOT edit or commit;
+      # regenerate with `dotfiles secrets`.
+      {% for n in (_bw_env_items.stdout | from_json) if n.type == 2 and (n.name | regex_search('^[A-Za-z_][A-Za-z0-9_]*$')) %}
+      {{ n.name }}={{ (n.notes | default('')) | quote }}
+      {% endfor %}
+  no_log: true
+  when:
+    - bitwarden_env_folder | length > 0
+    - _bw_env_folder_id | length > 0
+
 # ---- Cleanup ---------------------------------------------------------------
 - name: Lock the vault
   ansible.builtin.command:

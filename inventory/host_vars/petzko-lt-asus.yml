@@ -20,6 +20,7 @@ common_packages_host:
   - ripgrep
   - docker
   - docker-compose
+  - tailscale
 
 # --- Flatpak apps unique to this laptop -------------------------------------
 # Bitwarden desktop — official, publisher-verified Flathub app (GPL-3.0).
@@ -34,6 +35,7 @@ additional_roles:
   - zsh
   - cli
   - git
+  - neovim
 
 # --- Secrets from Bitwarden (bitwarden role: via additional_roles or `dotfiles secrets`)
 # Credentials are prompted at runtime (see README); these lists declare what to
@@ -54,3 +56,7 @@ bitwarden_notes:
   - item: "sops-age-pgp-key"
     dest: "{{ bitwarden_home }}/.config/sops/age/keys.txt"
     mode: "0600"
+
+# Environment-variable Secure Notes: every note in the Bitwarden folder
+# `environment-variables` is exported as $NAME=<note body> via
+# ~/.config/zsh/secrets.env (on by default; see roles/bitwarden/defaults).

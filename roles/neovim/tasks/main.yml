@@ -1,0 +1,68 @@
+---
+# Install Neovim, the AstroNvim distribution, and shell integration (vim/vi
+# aliases + default $EDITOR). The package install escalates; everything else
+# runs as the user (become: false, via the additional_roles play). Local
+# connection assumed — the symlinked shell fragment targets this repo.
+
+- name: Ensure Neovim is installed
+  ansible.builtin.package:
+    name: "{{ nvim_package }}"
+    state: present
+  become: true
+  tags:
+    - nvim_install
+
+- name: Identify the target user
+  ansible.builtin.command:
+    cmd: id -un
+  register: _nvim_user
+  changed_when: false
+  check_mode: false
+
+- name: Look up the target user's home directory
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ _nvim_user.stdout }}"
+
+- name: Resolve the home directory
+  ansible.builtin.set_fact:
+    nvim_home: "{{ ansible_facts.getent_passwd[_nvim_user.stdout][4] }}"
+
+- name: Check for an existing Neovim config
+  ansible.builtin.stat:
+    path: "{{ nvim_config_dir }}"
+  register: _nvim_cfg
+
+- name: Detect whether that config is a git checkout (an AstroNvim clone)
+  ansible.builtin.stat:
+    path: "{{ nvim_config_dir }}/.git"
+  register: _nvim_cfg_git
+
+- name: Back up a pre-existing non-AstroNvim Neovim config (once)
+  ansible.builtin.command:
+    cmd: mv "{{ nvim_config_dir }}" "{{ nvim_config_dir }}.pre-ansible"
+    creates: "{{ nvim_config_dir }}.pre-ansible"
+  when:
+    - _nvim_cfg.stat.exists
+    - not _nvim_cfg_git.stat.exists
+
+- name: Install the AstroNvim template into the Neovim config dir
+  ansible.builtin.git:
+    repo: "{{ nvim_astronvim_repo }}"
+    dest: "{{ nvim_config_dir }}"
+    version: "{{ nvim_astronvim_version }}"
+    depth: 1
+    update: "{{ nvim_astronvim_update | bool }}"
+
+- name: Ensure the shell fragment directory exists
+  ansible.builtin.file:
+    path: "{{ nvim_shell_fragment_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Symlink the Neovim shell fragment (vim/vi aliases + $EDITOR)
+  ansible.builtin.file:
+    src: "{{ role_path }}/files/nvim.zsh"
+    dest: "{{ nvim_shell_fragment_dir }}/nvim.zsh"
+    state: link
+    force: true

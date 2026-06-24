@@ -1,0 +1,16 @@
+---
+# Neovim + the AstroNvim distribution, plus shell integration (vim/vi -> nvim
+# and the default $EDITOR). Runs as the user via the additional_roles play.
+
+nvim_package: neovim
+
+# AstroNvim installs by cloning its official template into the nvim config dir;
+# plugins finish installing on the first `nvim` launch (lazy.nvim bootstraps).
+nvim_astronvim_repo: "https://github.com/AstroNvim/template"
+nvim_astronvim_version: "main"
+# Re-pull the template on every run? Off so your own customizations survive.
+nvim_astronvim_update: false
+
+# Paths (overridable for testing). nvim_home is resolved at runtime.
+nvim_config_dir: "{{ nvim_home }}/.config/nvim"
+nvim_shell_fragment_dir: "{{ nvim_home }}/.config/zsh/rc.d"
