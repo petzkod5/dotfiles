@@ -1,0 +1,21 @@
+# ~/.config/dotfiles/config.toml — managed by Ansible (roles/cli/files/config.toml),
+# symlinked to ~/.config/dotfiles/config.toml. Edit here (or via the symlink, e.g.
+# `dotfiles config`) and commit to track your dotfiles CLI settings. TOML; needs
+# Python >= 3.11. Environment variables override these.
+#
+# Do NOT put secrets here — this file is git-tracked. Keep OPENROUTER_API_KEY in
+# your environment or a Bitwarden env note instead.
+
+[commit]
+model   = "nvidia/nemotron-3-nano-30b-a3b:free"
+# url     = "https://openrouter.ai/api/v1/chat/completions"
+# api_key = "sk-or-..."
+prompt  = """
+Commit the changes in this dotfiles repository. Ensure you check for secrets
+before committing. You must run gitleaks before committing. The commit message
+should follow conventionalcommits standards and be a general synopsis of the
+changes.
+"""
+
+[sync]
+# become = "none"   # skip the sudo-password prompt (NOPASSWD / headless sudo)

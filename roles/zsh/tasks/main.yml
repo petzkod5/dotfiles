@@ -1,5 +1,5 @@
 ---
-# Install oh-my-zsh for the login user and symlink a repo-tracked ~/.zshrc.
+# Install oh-my-zsh, symlink a repo-tracked ~/.zshrc, and drop rc.d fragments.
 # Runs as the user (become: false, via the additional_roles play) and writes
 # only inside the user's home. Assumes a local connection so the symlink target
 # (this repository) exists on the machine.
@@ -47,5 +47,18 @@
   ansible.builtin.file:
     src: "{{ role_path }}/files/zshrc"
     dest: "{{ zsh_home }}/.zshrc"
+    state: link
+    force: true
+
+- name: Ensure the shell rc.d directory exists
+  ansible.builtin.file:
+    path: "{{ zsh_home }}/.config/zsh/rc.d"
+    state: directory
+    mode: "0755"
+
+- name: Symlink the fnm shell fragment into rc.d
+  ansible.builtin.file:
+    src: "{{ role_path }}/files/fnm.zsh"
+    dest: "{{ zsh_home }}/.config/zsh/rc.d/fnm.zsh"
     state: link
     force: true

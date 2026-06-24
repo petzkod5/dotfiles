@@ -10,3 +10,4 @@ __common_os_packages:
   - man-db
   - pkgfile
   - github-cli    # GitHub CLI ('gh'); 'gh' on Debian/RedHat
+  - go            # Go toolchain ('golang-go' on Debian, 'golang' on RedHat)

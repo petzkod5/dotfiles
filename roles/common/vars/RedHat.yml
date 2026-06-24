@@ -3,6 +3,7 @@
 # Auto-loaded by tasks/main.yml from ansible_facts['os_family'].
 __common_os_packages:
   - "@Development Tools"   # dnf group: dnf group install "Development Tools"
+  - golang                 # Go toolchain ('go' on Arch, 'golang-go' on Debian)
   - fd-find                # 'fd' on Arch
   - gh                     # GitHub CLI (in Fedora repos; RHEL needs the gh dnf repo)
   - which

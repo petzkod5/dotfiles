@@ -31,6 +31,8 @@ current machine. Any extra arguments pass straight through to `ansible-playbook`
 | `dotfiles check`    | Preview changes without applying (`--check --diff`)      |
 | `dotfiles add-host` | Register this machine in the inventory + a host_vars file|
 | `dotfiles commit`   | Secret-scan, then commit all changes with a dated message|
+| `dotfiles review`   | Dry-run, then summarise pending changes with an LLM (needs key) |
+| `dotfiles doctor`   | Health-check deps/symlinks/config; LLM suggests fixes (key opt.)|
 | `dotfiles secrets`  | Pull secrets from Bitwarden (the `bitwarden` role only)  |
 | `dotfiles update`   | Install / refresh Galaxy collections                     |
 | `dotfiles edit`     | Open the repo in `$EDITOR`                               |
@@ -51,7 +53,8 @@ Optional environment overrides: `DOTFILES_HOST` (target host, default
 Prefer a file? `dotfiles config` scaffolds `~/.config/dotfiles/config.toml`
 (TOML), where the same settings live more comfortably — `commit.model`,
 `commit.prompt`, `commit.url`, `commit.api_key` and `sync.become` (the
-multi-line prompt especially). Precedence: env var > config file > default.
+multi-line prompt especially). Precedence: env var > config file > default. The
+`cli` role symlinks it to a repo-tracked file, so your settings are committed too.
 
 `dotfiles commit` stages everything, runs a secret scanner first when one is
 installed (`gitleaks`, else `git-secrets`) and aborts if it flags anything, then
@@ -60,6 +63,17 @@ from a Bitwarden env note) to instead generate a Conventional-Commits message
 with an LLM — tune `OPENROUTER_MODEL` (default `openai/gpt-4o-mini`) and the
 instructions in `DOTFILES_COMMIT_PROMPT`; if the call fails it falls back to the
 dated message.
+
+`dotfiles review` runs the same `--check --diff` dry-run as `dotfiles check`, then
+asks the LLM to summarise in plain English what a `sync` would change — grouped by
+role/task, with destructive operations flagged. It requires `OPENROUTER_API_KEY`
+(without one it would be identical to `dotfiles check`).
+
+`dotfiles doctor` health-checks this setup: core dependencies, the CLI symlink and
+PATH, config validity, managed/broken symlinks, host registration and playbook
+syntax — printing an `[OK]`/`[WARN]`/`[FAIL]` report (non-zero exit on any
+`[FAIL]`). With `OPENROUTER_API_KEY` set it also asks the LLM for concrete fixes;
+without a key it still runs every check and just skips that step.
 
 ## Running the playbook directly
 
@@ -99,7 +113,7 @@ The most common edits:
 | Role        | Does                                                       |
 |-------------|------------------------------------------------------------|
 | `zsh`       | oh-my-zsh + a symlinked `~/.zshrc`                         |
-| `cli`       | symlinks the `dotfiles` command onto `PATH`                |
+| `cli`       | symlinks the `dotfiles` command onto PATH + its config     |
 | `git`       | a symlinked `~/.gitconfig`                                 |
 | `neovim`    | Neovim + AstroNvim; aliases `vim`/`vi` → nvim, `$EDITOR=nvim` |
 | `bitwarden` | pulls SSH keys / notes / files from your Bitwarden vault   |

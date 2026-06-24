@@ -11,6 +11,9 @@ common_packages_family:
   - reflector        # rank/refresh mirror lists
   - discord          # native package (preferred over the Flathub build)
   - gitleaks         # secret scanner used by 'dotfiles commit'
+  - fnm              # Node version manager (Arch pkg; elsewhere use the fnm script)
+  - uv               # Astral Python package/project manager
+  - obsidian         # notes app (native; Flatpak md.obsidian.Obsidian elsewhere)
 
 # Discord is native on Arch, so ensure the Flathub variant is NOT installed.
 # This removes the duplicate if an earlier run added the Flatpak.

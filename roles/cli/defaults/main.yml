@@ -1,3 +1,6 @@
 ---
 # Directory (relative to the user's home) the dotfiles CLI is symlinked into.
 cli_bindir: ".local/bin"
+
+# Path (relative to the user's home) of the version-controlled CLI config.
+cli_config: ".config/dotfiles/config.toml"

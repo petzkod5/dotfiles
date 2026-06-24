@@ -191,28 +191,27 @@ scan_secrets() {  # run the first available well-known secret scanner on staged 
   fi
 }
 
-llm_commit_message() {  # print an LLM commit message from the staged diff, or fail
+# _llm_chat <system_prompt> <user_prompt>
+# Prints the model's reply on stdout; on failure prints to stderr and returns 1.
+# Uses OPENROUTER_API_KEY / OPENROUTER_MODEL / OPENROUTER_URL (resolved above).
+_llm_chat() {
   local py; py="$(command -v python3 || command -v python)" || return 1
-  local diff
-  diff="$( { git diff --cached --stat; echo; git diff --cached; } 2>/dev/null | head -c 12000 || true )"
-  OR_KEY="${OPENROUTER_API_KEY:-}" OR_MODEL="$OPENROUTER_MODEL" OR_URL="$OPENROUTER_URL" \
-  OR_PROMPT="$DOTFILES_COMMIT_PROMPT" OR_DIFF="$diff" "$py" - <<'PY'
+  [ -n "${OPENROUTER_API_KEY:-}" ] || { echo "openrouter: no API key set" >&2; return 1; }
+  OR_KEY="$OPENROUTER_API_KEY" OR_MODEL="$OPENROUTER_MODEL" OR_URL="$OPENROUTER_URL" \
+  OR_SYSTEM="$1" OR_USER="$2" "$py" - <<'PY'
 import json, os, sys, urllib.request, urllib.error
 payload = json.dumps({
     "model": os.environ["OR_MODEL"],
     "messages": [
-        {"role": "system", "content":
-            "You write git commit messages for a dotfiles repository. "
-            "Reply with ONLY the commit message text — no preamble, no code fences."},
-        {"role": "user", "content":
-            os.environ["OR_PROMPT"] + "\n\nStaged changes:\n\n" + os.environ["OR_DIFF"]},
+        {"role": "system", "content": os.environ["OR_SYSTEM"]},
+        {"role": "user", "content": os.environ["OR_USER"]},
     ],
 })
 req = urllib.request.Request(
     os.environ["OR_URL"], data=payload.encode(),
     headers={"Authorization": "Bearer " + os.environ["OR_KEY"],
              "Content-Type": "application/json",
-             "X-Title": "dotfiles commit"},
+             "X-Title": "dotfiles"},
 )
 try:
     with urllib.request.urlopen(req, timeout=60) as resp:
@@ -236,6 +235,14 @@ if not (isinstance(text, str) and text.strip()):
                      "(finish_reason=%s); try a non-reasoning model\n" % fr); sys.exit(1)
 print(text.strip())
 PY
+}
+
+llm_commit_message() {  # print an LLM commit message from the staged diff, or fail
+  local diff
+  diff="$( { git diff --cached --stat; echo; git diff --cached; } 2>/dev/null | head -c 12000 || true )"
+  _llm_chat \
+    "You write git commit messages for a dotfiles repository. Reply with ONLY the commit message text — no preamble, no code fences." \
+    "${DOTFILES_COMMIT_PROMPT}"$'\n\nStaged changes:\n\n'"${diff}"
 }
 
 do_commit() {  # commit — stage all changes, scan for secrets, commit with a dated message
@@ -267,6 +274,123 @@ do_commit() {  # commit — stage all changes, scan for secrets, commit with a d
     git commit --quiet -m "Update ${stamp}" -m "$(git status --short)"
     say "Committed 'Update ${stamp}'"
   fi
+}
+
+do_review() {  # review — dry-run the playbook and summarise the pending changes
+  [ -n "${OPENROUTER_API_KEY:-}" ] \
+    || die "review needs an LLM — set OPENROUTER_API_KEY (or use 'dotfiles check' for the raw diff)."
+  say "Previewing ${HOST} (dry-run) and summarising changes"
+  local tmp rc=0
+  tmp="$(mktemp)" || die "could not create a temp file."
+  # Show the check output live (tee) AND capture stdout for the LLM. The
+  # --ask-become-pass prompt reads from the tty and is unaffected by the pipe;
+  # stderr (prompt, warnings) is left on the terminal, not captured.
+  set +o pipefail
+  play site.yml --check --diff "$@" | tee "$tmp"
+  rc=${PIPESTATUS[0]}
+  set -o pipefail
+  local diff summary
+  diff="$(head -c 20000 "$tmp" || true)"
+  rm -f "$tmp"
+  if [ -z "${diff//[[:space:]]/}" ]; then
+    warn "  no dry-run output captured — nothing to summarise"
+    return "$rc"
+  fi
+  say "  summarising via OpenRouter (${OPENROUTER_MODEL})"
+  summary="$(_llm_chat \
+    "You explain the output of an Ansible 'ansible-playbook --check --diff' dry run to a developer. Summarise, in plain English, what applying it would change on this machine: group changes by role/task, name the files and packages touched, and explicitly flag anything destructive (file overwrites, removals, service restarts). If nothing would change, say so in one line. Be concise; use short bullets. Do not invent changes not present in the output." \
+    "$diff")" || { warn "  LLM summary failed — see the dry-run output above"; return "$rc"; }
+  printf '\n%sWhat sync would change:%s\n%s\n' "$b" "$n" "$summary"
+  return "$rc"
+}
+
+do_doctor() {  # doctor — health-check this setup; LLM suggests fixes when a key is set
+  local report="" fail=0
+  rec() {  # rec <OK|WARN|FAIL> <message>
+    local tag="$1"; shift
+    local col="$g"; case "$tag" in WARN) col="$y";; FAIL) col="$r"; fail=1;; esac
+    printf '%s[%s]%s %s\n' "$col" "$tag" "$n" "$*"
+    report+="[$tag] $*"$'\n'
+  }
+  local py; py="$(command -v python3 || command -v python || true)"
+
+  say "Diagnosing ${HOST} <- ${DOTFILES_DIR}"
+
+  # 1. Core dependencies
+  command -v ansible-playbook >/dev/null 2>&1 && rec OK "ansible-playbook present" || rec FAIL "ansible-playbook missing — run ${DOTFILES_DIR}/bootstrap.sh"
+  [ -n "$py" ] && rec OK "python present ($py)" || rec FAIL "python3 missing — required for config + LLM features"
+  command -v git >/dev/null 2>&1 && rec OK "git present" || rec FAIL "git missing"
+
+  # 2. Secret scanner (used by 'commit')
+  if command -v gitleaks >/dev/null 2>&1; then rec OK "secret scanner: gitleaks"
+  elif command -v git-secrets >/dev/null 2>&1; then rec OK "secret scanner: git-secrets"
+  else rec WARN "no secret scanner (gitleaks/git-secrets) — 'commit' will not scan"; fi
+
+  # 3. AI configuration
+  if [ -n "${OPENROUTER_API_KEY:-}" ]; then rec OK "OPENROUTER_API_KEY set (model ${OPENROUTER_MODEL})"
+  else rec WARN "OPENROUTER_API_KEY unset — commit/review/doctor AI features disabled"; fi
+
+  # 4. CLI symlink + PATH
+  local cli="$HOME/.local/bin/dotfiles"
+  if [ -L "$cli" ]; then
+    local tgt; tgt="$(readlink -f "$cli" 2>/dev/null || true)"
+    if [ "$tgt" = "$(readlink -f "$DOTFILES_DIR/bin/dotfiles" 2>/dev/null || true)" ]; then
+      rec OK "CLI symlinked: $cli"
+    else rec WARN "CLI symlink points to '$tgt', not $DOTFILES_DIR/bin/dotfiles — run 'dotfiles sync'"; fi
+  elif [ -e "$cli" ]; then rec WARN "$cli exists but is not a symlink"
+  else rec WARN "$cli missing — run 'dotfiles sync' (cli role)"; fi
+  case ":$PATH:" in *":$HOME/.local/bin:"*) rec OK "~/.local/bin on PATH";; *) rec WARN "~/.local/bin not on PATH";; esac
+
+  # 5. Config file: presence + parse
+  if [ -f "$DOTFILES_CONFIG" ]; then
+    if [ -n "$py" ] && "$py" - "$DOTFILES_CONFIG" <<'PY' >/dev/null 2>&1
+import sys, tomllib
+with open(sys.argv[1], "rb") as fh: tomllib.load(fh)
+PY
+    then rec OK "config parses: $DOTFILES_CONFIG"
+    else rec FAIL "config is invalid TOML: $DOTFILES_CONFIG"; fi
+  else rec WARN "no config at $DOTFILES_CONFIG — run 'dotfiles config'"; fi
+
+  # 6. Managed symlinks — flag dangling (target missing)
+  local link
+  for link in "$HOME/.zshrc" "$HOME/.gitconfig" "$HOME/.config/dotfiles/config.toml" "$cli"; do
+    if [ -L "$link" ] && [ ! -e "$link" ]; then rec FAIL "dangling symlink: $link -> $(readlink "$link")"; fi
+  done
+
+  # 7. Dangling links in ~/.local/bin
+  if [ -d "$HOME/.local/bin" ]; then
+    local broken; broken="$(find -L "$HOME/.local/bin" -maxdepth 1 -type l 2>/dev/null || true)"
+    [ -n "$broken" ] && rec WARN "broken links in ~/.local/bin: $(echo "$broken" | tr '\n' ' ')" || rec OK "no broken links in ~/.local/bin"
+  fi
+
+  # 8. Host registration
+  if ansible-inventory -i "$DOTFILES_DIR/inventory/hosts.yml" --host "$HOST" >/dev/null 2>&1; then
+    rec OK "host '${HOST}' registered in inventory"
+  else rec WARN "host '${HOST}' not in inventory — run 'dotfiles add-host'"; fi
+
+  # 9. Playbook syntax
+  if ( cd "$DOTFILES_DIR" && ansible-playbook site.yml --syntax-check >/dev/null 2>&1 ); then
+    rec OK "site.yml syntax OK"
+  else rec FAIL "site.yml failed --syntax-check — the repo is broken"; fi
+
+  # 10. Working tree (informational)
+  local dirty; dirty="$(git -C "$DOTFILES_DIR" status --porcelain 2>/dev/null | wc -l | tr -d ' ')"
+  [ "${dirty:-0}" -gt 0 ] && rec OK "${dirty} uncommitted change(s) — run 'dotfiles commit'" || rec OK "working tree clean"
+
+  # AI remediation (only when configured)
+  if [ -n "${OPENROUTER_API_KEY:-}" ]; then
+    local advice
+    say "  asking OpenRouter for fixes (${OPENROUTER_MODEL})"
+    advice="$(_llm_chat \
+      "You are a Linux dotfiles troubleshooting assistant. Given a health-check report (lines tagged [OK]/[WARN]/[FAIL]) for an Ansible-managed dotfiles setup driven by a 'dotfiles' CLI (commands: sync, add-host, config, commit, secrets), give concrete fixes ONLY for [WARN]/[FAIL] lines, as a short ordered list with the exact command to run. If everything is [OK], reply 'No action needed.' Be concise." \
+      "$report")" \
+      && printf '\n%sSuggested fixes:%s\n%s\n' "$b" "$n" "$advice" \
+      || warn "  LLM advice failed — findings above stand on their own"
+  else
+    printf '\n%sTip:%s set OPENROUTER_API_KEY for AI-suggested fixes.\n' "$b" "$n"
+  fi
+
+  [ "$fail" -eq 0 ] || return 1
 }
 
 ensure_config() {  # create the config (commented template) if it does not exist
@@ -309,6 +433,8 @@ ${b}Commands:${n}
   update    Install/refresh Galaxy collections (requirements.yml)
   add-host  Register this machine (or HOST) in the inventory + host_vars
   commit    Stage, secret-scan, then commit (LLM message if OPENROUTER_API_KEY set)
+  review    Dry-run the playbook and summarise pending changes (needs OPENROUTER_API_KEY)
+  doctor    Health-check this setup; LLM suggests fixes if OPENROUTER_API_KEY is set
   edit      Open the repo in \$EDITOR
   config    Create/edit ~/.config/dotfiles/config.toml (prompt, model, become)
   status    Show repo path, host and git working-tree status
@@ -340,6 +466,8 @@ case "$cmd" in
                    ( cd "$DOTFILES_DIR" && ansible-galaxy collection install -r requirements.yml "$@" ) ;;
   add-host)        add_host "$@" ;;
   commit)          do_commit "$@" ;;
+  review)          do_review "$@" ;;
+  doctor)          do_doctor "$@" ;;
   config)          ensure_config; say "config: ${DOTFILES_CONFIG}"; ( exec "${EDITOR:-vi}" "$DOTFILES_CONFIG" ) ;;
   edit)            ( cd "$DOTFILES_DIR" && exec "${EDITOR:-vi}" . ) ;;
   status)          printf '%srepo%s %s\n%shost%s %s\n' "$b" "$n" "$DOTFILES_DIR" "$b" "$n" "$HOST"

@@ -1,5 +1,5 @@
 ---
-# Symlink the repo-tracked `dotfiles` CLI into the user's ~/.local/bin.
+# Symlink the repo-tracked `dotfiles` CLI (and its config) into the user's home.
 # Runs as the user (become: false, via the additional_roles play). Assumes a
 # local connection so the symlink target (this repo) exists on the machine.
 
@@ -29,5 +29,33 @@
   ansible.builtin.file:
     src: "{{ playbook_dir }}/bin/dotfiles"
     dest: "{{ cli_home }}/{{ cli_bindir }}/dotfiles"
+    state: link
+    force: true
+
+- name: Ensure the dotfiles config directory exists
+  ansible.builtin.file:
+    path: "{{ cli_home }}/{{ cli_config | dirname }}"
+    state: directory
+    mode: "0755"
+
+- name: Check for an existing CLI config
+  ansible.builtin.stat:
+    path: "{{ cli_home }}/{{ cli_config }}"
+  register: _cli_cfg
+
+- name: Back up a pre-existing real CLI config (once)
+  ansible.builtin.copy:
+    src: "{{ cli_home }}/{{ cli_config }}"
+    dest: "{{ cli_home }}/{{ cli_config }}.pre-ansible"
+    remote_src: true
+    force: false
+  when:
+    - _cli_cfg.stat.exists
+    - not _cli_cfg.stat.islnk
+
+- name: Symlink the dotfiles CLI config to the repo-tracked file
+  ansible.builtin.file:
+    src: "{{ role_path }}/files/config.toml"
+    dest: "{{ cli_home }}/{{ cli_config }}"
     state: link
     force: true
