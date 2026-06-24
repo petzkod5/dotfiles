@@ -1,0 +1,45 @@
+---
+# Install a single tool described by `tool` (an entry of k8s_tools_catalog).
+# The artifact lands in a versioned directory and its binaries are symlinked
+# onto PATH. Idempotency comes from the versioned path: `creates` (tarball) and
+# get_url's default force=false (binary) make repeat runs no-ops, while a
+# version bump produces a new directory and re-points the symlink.
+
+- name: "Resolve the versioned install directory for {{ tool.name }}"
+  ansible.builtin.set_fact:
+    _k8s_tool_dir: "{{ k8s_tools_lib_dir }}/{{ tool.name }}-{{ tool.version }}"
+
+- name: "Create the install directory for {{ tool.name }}"
+  become: true
+  ansible.builtin.file:
+    path: "{{ _k8s_tool_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: "Download and extract {{ tool.name }}"
+  become: true
+  ansible.builtin.unarchive:
+    src: "{{ tool.url }}"
+    dest: "{{ _k8s_tool_dir }}"
+    remote_src: true
+    creates: "{{ _k8s_tool_dir }}/{{ tool.bins[0].src }}"
+  when: tool.kind == 'tarball'
+
+- name: "Download {{ tool.name }}"
+  become: true
+  ansible.builtin.get_url:
+    url: "{{ tool.url }}"
+    dest: "{{ _k8s_tool_dir }}/{{ tool.bins[0].src }}"
+    mode: "0755"
+  when: tool.kind == 'binary'
+
+- name: "Symlink binaries for {{ tool.name }}"
+  become: true
+  ansible.builtin.file:
+    src: "{{ _k8s_tool_dir }}/{{ item.src }}"
+    dest: "{{ k8s_tools_bin_dir }}/{{ item.name }}"
+    state: link
+    force: true
+  loop: "{{ tool.bins }}"
+  loop_control:
+    label: "{{ item.name }} -> {{ item.src }}"

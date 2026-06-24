@@ -1,0 +1,119 @@
+---
+# =============================================================================
+# k8s-tools role — default variables.
+# -----------------------------------------------------------------------------
+# Installs common Kubernetes CLI tooling straight from upstream release
+# artifacts (GitHub / vendor mirrors), so the same recipe works on every
+# distribution regardless of repo/AUR coverage. Each tool is unpacked into a
+# versioned directory under k8s_tools_lib_dir and symlinked onto PATH from
+# k8s_tools_bin_dir. Bumping a *_version re-downloads into a fresh directory and
+# re-points the symlink; an unchanged version is a no-op.
+#
+# Customise per host:
+#   - pin/upgrade a tool      -> set its k8s_tools_<tool>_version
+#   - install only a subset   -> trim k8s_tools_enabled
+# =============================================================================
+
+# --- Install locations (system-wide; both must be on $PATH for the bin dir) --
+k8s_tools_bin_dir: /usr/local/bin
+k8s_tools_lib_dir: /usr/local/lib/k8s-tools
+
+# --- Pinned tool versions (no leading "v"; bump to upgrade) ------------------
+k8s_tools_kubectl_version: "1.36.2"
+k8s_tools_helm_version: "4.2.2"
+k8s_tools_helmfile_version: "1.6.0"
+k8s_tools_k9s_version: "0.51.0"
+k8s_tools_kind_version: "0.32.0"
+k8s_tools_minikube_version: "1.38.1"
+k8s_tools_sops_version: "3.13.1"
+k8s_tools_age_version: "1.3.1"
+k8s_tools_talosctl_version: "1.13.5"
+
+# --- Which tools to install (names must exist in k8s_tools_catalog) ----------
+# Drop entries here to skip a tool on a given host.
+k8s_tools_enabled:
+  - kubectl
+  - helm
+  - helmfile
+  - k9s
+  - kind
+  - minikube
+  - sops
+  - age
+  - talosctl
+
+# --- Tool catalog: download recipes (not meant to be overridden per host) ----
+# Each entry:
+#   name     command/tool identifier (matches k8s_tools_enabled)
+#   version  resolved from the *_version vars above
+#   kind     'binary'  -> url is a single executable, saved as bins[0].src
+#            'tarball' -> url is a .tar.gz extracted into the versioned dir
+#   url      download URL ({{ _k8s_tools_arch }} is the resolved CPU arch)
+#   bins     binaries to expose: src is the path inside the versioned dir,
+#            name is the symlink created in k8s_tools_bin_dir.
+# bins[0].src doubles as the idempotency marker (creates:/get_url dest).
+k8s_tools_catalog:
+  - name: kubectl
+    version: "{{ k8s_tools_kubectl_version }}"
+    kind: binary
+    url: "https://dl.k8s.io/release/v{{ k8s_tools_kubectl_version }}/bin/linux/{{ _k8s_tools_arch }}/kubectl"
+    bins:
+      - { src: kubectl, name: kubectl }
+
+  - name: helm
+    version: "{{ k8s_tools_helm_version }}"
+    kind: tarball
+    url: "https://get.helm.sh/helm-v{{ k8s_tools_helm_version }}-linux-{{ _k8s_tools_arch }}.tar.gz"
+    bins:
+      - { src: "linux-{{ _k8s_tools_arch }}/helm", name: helm }
+
+  - name: helmfile
+    version: "{{ k8s_tools_helmfile_version }}"
+    kind: tarball
+    url: "https://github.com/helmfile/helmfile/releases/download/v{{ k8s_tools_helmfile_version }}/\
+      helmfile_{{ k8s_tools_helmfile_version }}_linux_{{ _k8s_tools_arch }}.tar.gz"
+    bins:
+      - { src: helmfile, name: helmfile }
+
+  - name: k9s
+    version: "{{ k8s_tools_k9s_version }}"
+    kind: tarball
+    url: "https://github.com/derailed/k9s/releases/download/v{{ k8s_tools_k9s_version }}/k9s_Linux_{{ _k8s_tools_arch }}.tar.gz"
+    bins:
+      - { src: k9s, name: k9s }
+
+  - name: kind
+    version: "{{ k8s_tools_kind_version }}"
+    kind: binary
+    url: "https://github.com/kubernetes-sigs/kind/releases/download/v{{ k8s_tools_kind_version }}/kind-linux-{{ _k8s_tools_arch }}"
+    bins:
+      - { src: kind, name: kind }
+
+  - name: minikube
+    version: "{{ k8s_tools_minikube_version }}"
+    kind: binary
+    url: "https://github.com/kubernetes/minikube/releases/download/v{{ k8s_tools_minikube_version }}/minikube-linux-{{ _k8s_tools_arch }}"
+    bins:
+      - { src: minikube, name: minikube }
+
+  - name: sops
+    version: "{{ k8s_tools_sops_version }}"
+    kind: binary
+    url: "https://github.com/getsops/sops/releases/download/v{{ k8s_tools_sops_version }}/sops-v{{ k8s_tools_sops_version }}.linux.{{ _k8s_tools_arch }}"
+    bins:
+      - { src: sops, name: sops }
+
+  - name: age
+    version: "{{ k8s_tools_age_version }}"
+    kind: tarball
+    url: "https://github.com/FiloSottile/age/releases/download/v{{ k8s_tools_age_version }}/age-v{{ k8s_tools_age_version }}-linux-{{ _k8s_tools_arch }}.tar.gz"
+    bins:
+      - { src: age/age, name: age }
+      - { src: age/age-keygen, name: age-keygen }
+
+  - name: talosctl
+    version: "{{ k8s_tools_talosctl_version }}"
+    kind: binary
+    url: "https://github.com/siderolabs/talos/releases/download/v{{ k8s_tools_talosctl_version }}/talosctl-linux-{{ _k8s_tools_arch }}"
+    bins:
+      - { src: talosctl, name: talosctl }

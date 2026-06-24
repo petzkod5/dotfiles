@@ -1,0 +1,47 @@
+---
+# Install common Kubernetes CLI tooling from upstream release artifacts.
+# Designed for the additional_roles play (become: false at the play level); the
+# tasks that write under k8s_tools_lib_dir / k8s_tools_bin_dir escalate on their
+# own, mirroring the neovim role.
+
+- name: Map the CPU architecture to upstream release naming
+  ansible.builtin.set_fact:
+    _k8s_tools_arch: "{{ _k8s_tools_arch_map[ansible_facts['architecture']] | default(ansible_facts['architecture']) }}"
+  vars:
+    _k8s_tools_arch_map:
+      x86_64: amd64
+      aarch64: arm64
+      armv7l: arm
+  tags:
+    - always
+
+- name: Resolve the selected tools from the catalog
+  ansible.builtin.set_fact:
+    _k8s_tools_selected: "{{ k8s_tools_catalog | selectattr('name', 'in', k8s_tools_enabled) | list }}"
+
+- name: Fail when an enabled tool is missing from the catalog
+  ansible.builtin.assert:
+    that:
+      - _k8s_tools_selected | map(attribute='name') | list | sort
+        == k8s_tools_enabled | unique | list | sort
+    fail_msg: >-
+      k8s_tools_enabled lists tools absent from k8s_tools_catalog:
+      {{ k8s_tools_enabled | unique | difference(k8s_tools_catalog | map(attribute='name') | list) | join(', ') }}
+    quiet: true
+
+- name: Ensure the install directories exist
+  become: true
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - "{{ k8s_tools_lib_dir }}"
+    - "{{ k8s_tools_bin_dir }}"
+
+- name: Install each selected tool
+  ansible.builtin.include_tasks: install_tool.yml
+  loop: "{{ _k8s_tools_selected }}"
+  loop_control:
+    loop_var: tool
+    label: "{{ tool.name }} {{ tool.version }}"

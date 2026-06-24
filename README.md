@@ -118,6 +118,7 @@ The most common edits:
 | `git`       | a symlinked `~/.gitconfig`                                 |
 | `neovim`    | Neovim + AstroNvim; aliases `vim`/`vi` → nvim, `$EDITOR=nvim` |
 | `bitwarden` | pulls SSH keys / notes / files from your Bitwarden vault   |
+| `k8s-tools` | Kubernetes CLI tooling from upstream releases (kubectl, helm, helmfile, k9s, kind, minikube, sops, age, talosctl) |
 
 The file-symlinking roles (`zsh`, `cli`, `git`, `neovim`) mean editing the live
 file edits the tracked repo file — customise once, then `dotfiles commit`.
@@ -149,5 +150,5 @@ bin/dotfiles    the dotfiles command (symlinked onto PATH by the cli role)
 bootstrap.sh    install prerequisites on a fresh host
 site.yml        the playbook — common baseline, then per-host additional_roles
 inventory/      hosts.yml, group_vars/ (common + per-family), host_vars/
-roles/          common, zsh, cli, git, neovim, bitwarden
+roles/          common, zsh, cli, git, neovim, bitwarden, k8s-tools
 ```
