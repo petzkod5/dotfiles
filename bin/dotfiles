@@ -197,7 +197,7 @@ llm_commit_message() {  # print an LLM commit message from the staged diff, or f
   diff="$( { git diff --cached --stat; echo; git diff --cached; } 2>/dev/null | head -c 12000 || true )"
   OR_KEY="${OPENROUTER_API_KEY:-}" OR_MODEL="$OPENROUTER_MODEL" OR_URL="$OPENROUTER_URL" \
   OR_PROMPT="$DOTFILES_COMMIT_PROMPT" OR_DIFF="$diff" "$py" - <<'PY'
-import json, os, sys, urllib.request
+import json, os, sys, urllib.request, urllib.error
 payload = json.dumps({
     "model": os.environ["OR_MODEL"],
     "messages": [
@@ -216,13 +216,25 @@ req = urllib.request.Request(
 )
 try:
     with urllib.request.urlopen(req, timeout=60) as resp:
-        msg = json.load(resp)["choices"][0]["message"]["content"].strip()
+        data = json.load(resp)
+except urllib.error.HTTPError as exc:
+    body = exc.read().decode("utf-8", "replace")[:400]
+    sys.stderr.write("openrouter: HTTP %s — %s\n" % (exc.code, body)); sys.exit(1)
 except Exception as exc:
-    sys.stderr.write("openrouter: %s\n" % exc)
-    sys.exit(1)
-if not msg:
-    sys.exit(1)
-print(msg)
+    sys.stderr.write("openrouter: %s\n" % exc); sys.exit(1)
+if isinstance(data, dict) and data.get("error"):
+    sys.stderr.write("openrouter: %s\n" % json.dumps(data["error"])[:400]); sys.exit(1)
+choices = data.get("choices") or []
+message = (choices[0].get("message") or {}) if choices else {}
+# Most models put the text in .content; some reasoning models leave it in .reasoning.
+text = message.get("content")
+if not (isinstance(text, str) and text.strip()):
+    text = message.get("reasoning")
+if not (isinstance(text, str) and text.strip()):
+    fr = choices[0].get("finish_reason") if choices else None
+    sys.stderr.write("openrouter: model returned no message content "
+                     "(finish_reason=%s); try a non-reasoning model\n" % fr); sys.exit(1)
+print(text.strip())
 PY
 }
 
