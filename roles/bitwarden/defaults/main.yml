@@ -8,6 +8,11 @@
 # the npm package @bitwarden/cli instead).
 bitwarden_cli_package: "bitwarden-cli"
 
+# Debian/RedHat have no bw package — install Node.js (these) then the npm CLI.
+bitwarden_node_packages:
+  - nodejs
+  - npm
+
 # Vault server. Cloud default; use https://vault.bitwarden.eu for EU, or your
 # self-hosted URL.
 bitwarden_server: "https://vault.bitwarden.com"

@@ -1,0 +1,23 @@
+---
+galaxy_info:
+  role_name: upstream_tools
+  namespace: petzko
+  author: petzko
+  description: "Install dev CLI tools (lazygit, gitleaks, fnm, uv) from upstream releases."
+  license: MIT
+  min_ansible_version: "2.15"
+  platforms:
+    - name: Archlinux
+      versions:
+        - all
+    - name: Ubuntu
+      versions:
+        - all
+    - name: Fedora
+      versions:
+        - all
+  galaxy_tags:
+    - tools
+    - dotfiles
+
+dependencies: []

@@ -20,6 +20,24 @@ exec $SHELL                # reload PATH — `dotfiles` is now available everywh
 The first `sync` symlinks the command to `~/.local/bin/dotfiles`, so from then on
 you just run `dotfiles sync` from any directory.
 
+## Install remotely (one command)
+
+On a fresh machine, bootstrap everything in one shot:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/petzkod5/dotfiles/main/install.sh | sh
+```
+
+It ensures `git`, clones the repo to `~/petzko-dotfiles`, runs `bootstrap.sh`
+(git/python/ansible + Galaxy collections), then `dotfiles sync` — prompting for
+your sudo password (and the Bitwarden master password if that role is enabled).
+Run `exec $SHELL` afterward to put the `dotfiles` command on your PATH.
+
+Override via env vars: `DOTFILES_DIR` (clone path), `DOTFILES_BRANCH`,
+`DOTFILES_REPO_URL`. The machine must already exist in the inventory (its
+hostname matching an entry); if not, the script prints the `dotfiles add-host`
+step to run first.
+
 ## The `dotfiles` command
 
 `dotfiles <command>` wraps the common Ansible invocations and always targets the
@@ -119,6 +137,9 @@ The most common edits:
 | `neovim`    | Neovim + AstroNvim; aliases `vim`/`vi` → nvim, `$EDITOR=nvim` |
 | `bitwarden` | pulls SSH keys / notes / files from your Bitwarden vault   |
 | `k8s-tools` | Kubernetes CLI tooling from upstream releases (kubectl, helm, helmfile, k9s, kind, minikube, sops, age, talosctl) |
+| `upstream-tools` | dev CLIs from upstream releases where apt lacks them (lazygit, gitleaks, fnm, uv) |
+| `docker`    | Docker Engine + Compose; daemon enabled, user added to `docker`       |
+| `tailscale` | Tailscale + `tailscaled` (`sudo tailscale up` once to authenticate)   |
 
 The file-symlinking roles (`zsh`, `cli`, `git`, `neovim`) mean editing the live
 file edits the tracked repo file — customise once, then `dotfiles commit`.
@@ -150,5 +171,5 @@ bin/dotfiles    the dotfiles command (symlinked onto PATH by the cli role)
 bootstrap.sh    install prerequisites on a fresh host
 site.yml        the playbook — common baseline, then per-host additional_roles
 inventory/      hosts.yml, group_vars/ (common + per-family), host_vars/
-roles/          common, zsh, cli, git, neovim, bitwarden, k8s-tools
+roles/          common, zsh, cli, git, neovim, bitwarden, k8s-tools, upstream-tools, docker, tailscale
 ```

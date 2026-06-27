@@ -25,7 +25,6 @@ common_manage_hostname: false
 # --- Packages every machine should carry (names valid on all families) ------
 common_packages_all:
   - ca-certificates
-  - lazygit
 
 # --- Extra per-host roles ---------------------------------------------------
 # Roles site.yml runs in addition to `common`. Empty fleet-wide; a host opts in

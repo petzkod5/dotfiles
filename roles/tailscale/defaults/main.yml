@@ -1,0 +1,7 @@
+---
+# =============================================================================
+# tailscale role — install Tailscale and enable tailscaled. Debian/Ubuntu: adds
+# Tailscale's official apt repo. Arch: distro package. After the first run,
+# authenticate once with:  sudo tailscale up
+# =============================================================================
+tailscale_service: tailscaled

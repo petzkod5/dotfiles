@@ -1,0 +1,36 @@
+---
+# Install catalog-driven CLI tools from upstream release artifacts, versioned
+# under upstream_tools_lib_dir and symlinked onto PATH. Mirrors the k8s-tools
+# role; intended for the additional_roles play (become: false at play level —
+# the tasks that write system-wide escalate on their own).
+
+- name: Resolve the selected tools from the catalog
+  ansible.builtin.set_fact:
+    _upstream_tools_selected: "{{ upstream_tools_catalog | selectattr('name', 'in', upstream_tools_enabled) | list }}"
+
+- name: Fail when an enabled tool is missing from the catalog
+  ansible.builtin.assert:
+    that:
+      - _upstream_tools_selected | map(attribute='name') | list | sort
+        == upstream_tools_enabled | unique | list | sort
+    fail_msg: >-
+      upstream_tools_enabled lists tools absent from the catalog:
+      {{ upstream_tools_enabled | unique | difference(upstream_tools_catalog | map(attribute='name') | list) | join(', ') }}
+    quiet: true
+
+- name: Ensure the install directories exist
+  become: true
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - "{{ upstream_tools_lib_dir }}"
+    - "{{ upstream_tools_bin_dir }}"
+
+- name: Install each selected tool
+  ansible.builtin.include_tasks: install_tool.yml
+  loop: "{{ _upstream_tools_selected }}"
+  loop_control:
+    loop_var: tool
+    label: "{{ tool.name }} {{ tool.version }}"

@@ -1,0 +1,45 @@
+---
+# =============================================================================
+# HOST layer — petzko-ubuntu-vm (Ubuntu server VM, Debian family).
+# Provisioned to mirror petzko-lt-asus's software, minus the desktop GUI apps.
+# Runs Ansible against itself (ansible_connection: local, set in the inventory).
+# =============================================================================
+
+# Pin the hostname (matches the inventory name).
+common_manage_hostname: true
+common_hostname: "petzko-ubuntu-vm"
+
+# Per-host apt packages. Everything else comes from layers/roles:
+#   - go / fd / gh / build tools  -> roles/common/vars/Debian.yml
+#   - lazygit / gitleaks / fnm / uv -> upstream-tools role (not in apt)
+#   - docker, tailscale           -> their own roles (official apt repos)
+# so only ripgrep needs listing here.
+common_packages_host:
+  - ripgrep
+
+# Roles for this host. Same set as the laptop, plus the Debian helpers that
+# stand in for Arch-repo packages: upstream-tools (lazygit/gitleaks/fnm/uv),
+# docker and tailscale. Desktop GUI apps (Discord/Obsidian/Bitwarden desktop)
+# are intentionally omitted on a headless server.
+additional_roles:
+  - bitwarden
+  - zsh
+  - cli
+  - git
+  - neovim
+  - k8s-tools
+  - upstream-tools
+  - docker
+  - tailscale
+
+# --- Secrets from Bitwarden (same declarations as the laptop) ----------------
+bitwarden_ssh_keys:
+  - item: "petzkod Github"
+    dest: "{{ bitwarden_ssh_dir }}/id_ed25519"
+bitwarden_notes:
+  - item: "sops-age-pgp-key"
+    dest: "{{ bitwarden_home }}/.config/sops/age/keys.txt"
+    mode: "0600"
+
+# Environment-variable Secure Notes (folder `environment-variables`) are pulled
+# into ~/.config/zsh/secrets.env by default (see roles/bitwarden/defaults).

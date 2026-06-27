@@ -6,11 +6,27 @@
 # authenticated (status != 'unauthenticated') login is skipped, so they are
 # neither prompted for nor required — only the master password (to unlock).
 
-- name: Install the Bitwarden CLI
+- name: Install the Bitwarden CLI (distro package — Arch)
   ansible.builtin.package:
     name: "{{ bitwarden_cli_package }}"
     state: present
   become: true
+  when: ansible_facts['os_family'] == 'Archlinux'
+
+- name: Install Node.js for the Bitwarden CLI (Debian/RedHat)
+  ansible.builtin.package:
+    name: "{{ bitwarden_node_packages }}"
+    state: present
+  become: true
+  when: ansible_facts['os_family'] != 'Archlinux'
+
+- name: Install the Bitwarden CLI via npm (Debian/RedHat)
+  community.general.npm:
+    name: "@bitwarden/cli"
+    global: true
+    state: present
+  become: true
+  when: ansible_facts['os_family'] != 'Archlinux'
 
 - name: Read Bitwarden auth status
   ansible.builtin.command:

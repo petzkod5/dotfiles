@@ -1,0 +1,21 @@
+---
+galaxy_info:
+  role_name: tailscale
+  namespace: petzko
+  author: petzko
+  description: "Install Tailscale and enable the tailscaled service."
+  license: MIT
+  min_ansible_version: "2.15"
+  platforms:
+    - name: Archlinux
+      versions:
+        - all
+    - name: Ubuntu
+      versions:
+        - all
+  galaxy_tags:
+    - tailscale
+    - vpn
+    - dotfiles
+
+dependencies: []

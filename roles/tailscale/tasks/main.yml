@@ -1,0 +1,49 @@
+---
+# Install Tailscale and enable tailscaled. On Debian the keyring + apt source
+# are fetched straight from Tailscale (their .list references the keyring path),
+# matching the official install docs.
+
+- name: Set up the Tailscale apt repository (Debian)
+  when: ansible_facts['os_family'] == 'Debian'
+  become: true
+  block:
+    - name: Add Tailscale's signing key
+      ansible.builtin.get_url:
+        url: "https://pkgs.tailscale.com/stable/{{ ansible_facts['distribution'] | lower }}/{{ ansible_facts['distribution_release'] }}.noarmor.gpg"
+        dest: /usr/share/keyrings/tailscale-archive-keyring.gpg
+        mode: "0644"
+
+    - name: Add the Tailscale apt source
+      ansible.builtin.get_url:
+        url: "https://pkgs.tailscale.com/stable/{{ ansible_facts['distribution'] | lower }}/{{ ansible_facts['distribution_release'] }}.tailscale-keyring.list"
+        dest: /etc/apt/sources.list.d/tailscale.list
+        mode: "0644"
+      register: _tailscale_repo
+
+    - name: Refresh apt cache after adding the Tailscale repo
+      ansible.builtin.apt:
+        update_cache: true
+      when: _tailscale_repo is changed
+
+- name: Install Tailscale (Debian)
+  ansible.builtin.apt:
+    name: tailscale
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  become: true
+  when: ansible_facts['os_family'] == 'Debian'
+
+- name: Install Tailscale (Archlinux)
+  community.general.pacman:
+    name: tailscale
+    state: present
+  become: true
+  when: ansible_facts['os_family'] == 'Archlinux'
+
+- name: Enable and start tailscaled
+  ansible.builtin.systemd:
+    name: "{{ tailscale_service }}"
+    enabled: true
+    state: started
+  become: true

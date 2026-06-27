@@ -14,6 +14,7 @@ common_packages_family:
   - fnm              # Node version manager (Arch pkg; elsewhere use the fnm script)
   - uv               # Astral Python package/project manager
   - obsidian         # notes app (native; Flatpak md.obsidian.Obsidian elsewhere)
+  - lazygit          # git TUI (Debian gets it via the upstream-tools role)
 
 # Discord is native on Arch, so ensure the Flathub variant is NOT installed.
 # This removes the duplicate if an earlier run added the Flatpak.

@@ -1,0 +1,77 @@
+---
+# Install Docker Engine + Compose and enable the daemon. Package install and
+# service management run as root; the login user is resolved with become:false
+# (the additional_roles play runs become:false) so the docker group is added to
+# the real user, not root.
+
+- name: Identify the login user
+  ansible.builtin.command:
+    cmd: id -un
+  become: false
+  register: _docker_user
+  changed_when: false
+  check_mode: false
+
+- name: Set up the Docker apt repository (Debian)
+  when: ansible_facts['os_family'] == 'Debian'
+  become: true
+  block:
+    - name: Ensure the apt keyrings directory exists
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: "0755"
+
+    - name: Add Docker's signing key
+      ansible.builtin.get_url:
+        url: "https://download.docker.com/linux/{{ ansible_facts['distribution'] | lower }}/gpg"
+        dest: /etc/apt/keyrings/docker.asc
+        mode: "0644"
+
+    - name: Add the Docker apt source
+      ansible.builtin.copy:
+        dest: /etc/apt/sources.list.d/docker.list
+        mode: "0644"
+        content: >-
+          deb [arch={{ _deb_arch }} signed-by=/etc/apt/keyrings/docker.asc]
+          https://download.docker.com/linux/{{ ansible_facts['distribution'] | lower }}
+          {{ ansible_facts['distribution_release'] }} stable
+      vars:
+        _deb_arch: "{{ {'x86_64': 'amd64', 'aarch64': 'arm64', 'armv7l': 'armhf'}[ansible_facts['architecture']] | default(ansible_facts['architecture']) }}"
+      register: _docker_repo
+
+    - name: Refresh apt cache after adding the Docker repo
+      ansible.builtin.apt:
+        update_cache: true
+      when: _docker_repo is changed
+
+- name: Install Docker (Debian)
+  ansible.builtin.apt:
+    name: "{{ docker_packages_debian }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  become: true
+  when: ansible_facts['os_family'] == 'Debian'
+
+- name: Install Docker (Archlinux)
+  community.general.pacman:
+    name: "{{ docker_packages_archlinux }}"
+    state: present
+  become: true
+  when: ansible_facts['os_family'] == 'Archlinux'
+
+- name: Enable and start the Docker service
+  ansible.builtin.systemd:
+    name: "{{ docker_service }}"
+    enabled: true
+    state: started
+  become: true
+
+- name: Add the login user to the docker group
+  ansible.builtin.user:
+    name: "{{ _docker_user.stdout }}"
+    groups: docker
+    append: true
+  become: true
+  when: docker_manage_group | bool

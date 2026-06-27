@@ -1,0 +1,60 @@
+---
+# =============================================================================
+# upstream-tools role — install dev CLI tools straight from upstream release
+# artifacts, for hosts whose package manager doesn't carry them (e.g. Debian/
+# Ubuntu, where lazygit, gitleaks, fnm and uv aren't in apt). Same download +
+# versioned-dir + symlink approach as the k8s-tools role.
+# -----------------------------------------------------------------------------
+# x86_64/amd64 only — the catalog URLs below are amd64 assets. Add per-arch
+# handling to the catalog if you ever target arm64.
+# =============================================================================
+
+# --- Install locations (system-wide; bin dir must be on $PATH) --------------
+upstream_tools_bin_dir: /usr/local/bin
+upstream_tools_lib_dir: /usr/local/lib/upstream-tools
+
+# --- Pinned versions (bump to upgrade). NOTE: uv tags have no leading "v". ---
+upstream_tools_lazygit_version: "0.62.2"
+upstream_tools_gitleaks_version: "8.30.1"
+upstream_tools_fnm_version: "1.39.0"
+upstream_tools_uv_version: "0.11.25"
+
+# --- Which tools to install (names must exist in the catalog) ----------------
+upstream_tools_enabled:
+  - lazygit
+  - gitleaks
+  - fnm
+  - uv
+
+# --- Catalog: download recipes ----------------------------------------------
+# Each entry: name, version, url (a .tar.gz or .zip — both extracted with
+# unarchive; zips need `unzip`, which the common role installs), and bins
+# (src = path inside the extracted dir, name = symlink in upstream_tools_bin_dir).
+# bins[0].src doubles as the idempotency marker (unarchive `creates:`).
+upstream_tools_catalog:
+  - name: lazygit
+    version: "{{ upstream_tools_lazygit_version }}"
+    url: "https://github.com/jesseduffield/lazygit/releases/download/v{{ upstream_tools_lazygit_version }}/\
+      lazygit_{{ upstream_tools_lazygit_version }}_Linux_x86_64.tar.gz"
+    bins:
+      - { src: lazygit, name: lazygit }
+
+  - name: gitleaks
+    version: "{{ upstream_tools_gitleaks_version }}"
+    url: "https://github.com/gitleaks/gitleaks/releases/download/v{{ upstream_tools_gitleaks_version }}/\
+      gitleaks_{{ upstream_tools_gitleaks_version }}_linux_x64.tar.gz"
+    bins:
+      - { src: gitleaks, name: gitleaks }
+
+  - name: fnm
+    version: "{{ upstream_tools_fnm_version }}"
+    url: "https://github.com/Schniz/fnm/releases/download/v{{ upstream_tools_fnm_version }}/fnm-linux.zip"
+    bins:
+      - { src: fnm, name: fnm }
+
+  - name: uv
+    version: "{{ upstream_tools_uv_version }}"
+    url: "https://github.com/astral-sh/uv/releases/download/{{ upstream_tools_uv_version }}/uv-x86_64-unknown-linux-gnu.tar.gz"
+    bins:
+      - { src: uv-x86_64-unknown-linux-gnu/uv, name: uv }
+      - { src: uv-x86_64-unknown-linux-gnu/uvx, name: uvx }

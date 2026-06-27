@@ -1,0 +1,19 @@
+---
+# =============================================================================
+# docker role — install Docker Engine + Compose plugin and enable the daemon.
+# Debian/Ubuntu: adds Docker's official apt repo. Arch: distro package. The
+# login user is added to the `docker` group so it can run docker without sudo
+# (log out/in for the group to take effect). Opt in via additional_roles.
+# =============================================================================
+docker_packages_debian:
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+  - docker-buildx-plugin
+  - docker-compose-plugin
+docker_packages_archlinux:
+  - docker
+  - docker-compose
+docker_service: docker
+# Add the login user to the docker group (rootless-ish convenience).
+docker_manage_group: true

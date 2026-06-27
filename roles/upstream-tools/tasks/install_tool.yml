@@ -1,0 +1,44 @@
+---
+# Install a single tool described by `tool` (a catalog entry): download+extract
+# the .tar.gz/.zip into a versioned dir, make the binaries executable (zip
+# archives don't preserve the exec bit), and symlink them onto PATH. Idempotent
+# via the versioned path; bumping a version re-downloads and re-points the link.
+
+- name: "Resolve the versioned install dir for {{ tool.name }}"
+  ansible.builtin.set_fact:
+    _upstream_tool_dir: "{{ upstream_tools_lib_dir }}/{{ tool.name }}-{{ tool.version }}"
+
+- name: "Create the install dir for {{ tool.name }}"
+  become: true
+  ansible.builtin.file:
+    path: "{{ _upstream_tool_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: "Download and extract {{ tool.name }}"
+  become: true
+  ansible.builtin.unarchive:
+    src: "{{ tool.url }}"
+    dest: "{{ _upstream_tool_dir }}"
+    remote_src: true
+    creates: "{{ _upstream_tool_dir }}/{{ tool.bins[0].src }}"
+
+- name: "Mark binaries executable for {{ tool.name }}"
+  become: true
+  ansible.builtin.file:
+    path: "{{ _upstream_tool_dir }}/{{ item.src }}"
+    mode: "0755"
+  loop: "{{ tool.bins }}"
+  loop_control:
+    label: "{{ item.src }}"
+
+- name: "Symlink binaries onto PATH for {{ tool.name }}"
+  become: true
+  ansible.builtin.file:
+    src: "{{ _upstream_tool_dir }}/{{ item.src }}"
+    dest: "{{ upstream_tools_bin_dir }}/{{ item.name }}"
+    state: link
+    force: true
+  loop: "{{ tool.bins }}"
+  loop_control:
+    label: "{{ item.name }} -> {{ item.src }}"
