@@ -19,6 +19,14 @@
     name: "{{ common_hostname }}"
   when: common_manage_hostname | bool
 
+- name: Ensure the hostname resolves on the loopback (prevents slow sudo / DNS hangs)
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    regexp: '^127\.0\.1\.1\s'
+    line: "127.0.1.1 {{ ansible_facts['hostname'] }}"
+    state: present
+  when: common_manage_etc_hosts | bool
+
 - name: Identify the login (non-root) user
   ansible.builtin.command:
     cmd: id -un

@@ -9,6 +9,10 @@
 # --- Identity ---------------------------------------------------------------
 common_manage_hostname: false
 common_hostname: "{{ inventory_hostname }}"
+# Ensure the system hostname resolves on the loopback (127.0.1.1) so sudo and
+# other tools never hang on a DNS lookup. Disable on a host that curates
+# /etc/hosts itself.
+common_manage_etc_hosts: true
 
 # --- Localisation -----------------------------------------------------------
 common_timezone: "UTC"
