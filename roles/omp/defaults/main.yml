@@ -1,0 +1,35 @@
+---
+# =============================================================================
+# omp role — install the oh-my-pi (omp) coding agent from upstream release
+# binaries and symlink a repo-tracked config into ~/.omp/agent/config.yml.
+# Runs as the user via the additional_roles play (become: false); a local
+# connection is assumed so the config symlink target (this repo) exists on the
+# machine.
+# =============================================================================
+
+# --- Pinned release (bump to upgrade; release tags carry a leading "v") ------
+omp_version: "16.3.0"
+omp_repo: "can1357/oh-my-pi"
+
+# --- Release-asset selection (arch/platform aware) --------------------------
+# Map Ansible's architecture fact to the arch token used in the asset name.
+omp_arch_map:
+  x86_64: x64
+  amd64: x64
+  aarch64: arm64
+  arm64: arm64
+omp_arch: "{{ omp_arch_map[ansible_facts['architecture']] | default('x64') }}"
+# Platform token (linux/darwin) from the OS fact.
+omp_platform: "{{ ansible_facts['system'] | lower }}"
+# Asset name (e.g. omp-linux-x64) and its download URL.
+omp_asset: "omp-{{ omp_platform }}-{{ omp_arch }}"
+omp_download_url: "https://github.com/{{ omp_repo }}/releases/download/v{{ omp_version }}/{{ omp_asset }}"
+
+# --- Install locations (user-level; bin dir must be on $PATH) ----------------
+# omp_home is resolved at runtime from the target user's passwd entry.
+omp_bin_dir: "{{ omp_home }}/.local/bin"
+omp_lib_dir: "{{ omp_home }}/.local/lib/omp"
+
+# --- Version-controlled config (symlinked into place) ------------------------
+omp_config_dir: "{{ omp_home }}/.omp/agent"
+omp_config_file: "{{ omp_config_dir }}/config.yml"

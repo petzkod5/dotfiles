@@ -1,0 +1,85 @@
+---
+# Install the oh-my-pi (omp) coding agent binary from upstream releases and
+# symlink a repo-tracked config into ~/.omp/agent/config.yml. Runs as the user
+# (become: false, via the additional_roles play) and writes only inside the
+# user's home. Assumes a local connection so the config symlink target (this
+# repo) exists on the machine. Edit roles/omp/files/config.yml (or
+# ~/.omp/agent/config.yml through the symlink) and commit to track your config.
+
+- name: Identify the target user
+  ansible.builtin.command:
+    cmd: id -un
+  register: _omp_user
+  changed_when: false
+  check_mode: false
+
+- name: Look up the target user's home directory
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ _omp_user.stdout }}"
+
+- name: Resolve the home directory
+  ansible.builtin.set_fact:
+    omp_home: "{{ ansible_facts.getent_passwd[_omp_user.stdout][4] }}"
+
+# --- Install the omp binary (versioned dir + symlink onto PATH) --------------
+# The versioned filename doubles as the idempotency marker: get_url skips the
+# download when it already exists, and bumping omp_version re-downloads and
+# re-points the PATH symlink.
+
+- name: Ensure the omp install directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - "{{ omp_lib_dir }}"
+    - "{{ omp_bin_dir }}"
+  # Create for real even during --check so the get_url below (which validates
+  # its destination directory) passes a `dotfiles check` on a fresh install.
+  check_mode: false
+
+- name: Download the pinned omp binary
+  ansible.builtin.get_url:
+    url: "{{ omp_download_url }}"
+    dest: "{{ omp_lib_dir }}/{{ omp_asset }}-{{ omp_version }}"
+    mode: "0755"
+
+- name: Symlink the omp binary onto PATH
+  ansible.builtin.file:
+    src: "{{ omp_lib_dir }}/{{ omp_asset }}-{{ omp_version }}"
+    dest: "{{ omp_bin_dir }}/omp"
+    state: link
+    force: true
+
+# --- Symlink the repo-tracked config ----------------------------------------
+
+- name: Ensure the omp config directory exists
+  ansible.builtin.file:
+    path: "{{ omp_config_dir }}"
+    state: directory
+    # 0700 matches omp's own convention: the agent dir holds sessions, history
+    # and memories, so keep it private rather than widening it.
+    mode: "0700"
+
+- name: Check for an existing omp config
+  ansible.builtin.stat:
+    path: "{{ omp_config_file }}"
+  register: _omp_cfg
+
+- name: Back up a pre-existing real omp config (once)
+  ansible.builtin.copy:
+    src: "{{ omp_config_file }}"
+    dest: "{{ omp_config_file }}.pre-ansible"
+    remote_src: true
+    force: false
+  when:
+    - _omp_cfg.stat.exists
+    - not _omp_cfg.stat.islnk
+
+- name: Symlink the omp config to the repo-tracked file
+  ansible.builtin.file:
+    src: "{{ role_path }}/files/config.yml"
+    dest: "{{ omp_config_file }}"
+    state: link
+    force: true

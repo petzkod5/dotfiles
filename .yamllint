@@ -21,3 +21,6 @@ rules:
 ignore: |
   .ansible_cache/
   collections/
+  # Tool-owned config captured verbatim from ~/.omp; omp rewrites it in its
+  # own style (no document-start, trailing spaces after mapping keys).
+  roles/omp/files/

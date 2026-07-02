@@ -140,9 +140,10 @@ The most common edits:
 | `upstream-tools` | dev CLIs from upstream releases where apt lacks them (lazygit, gitleaks, fnm, uv) |
 | `docker`    | Docker Engine + Compose; daemon enabled, user added to `docker`       |
 | `tailscale` | Tailscale + `tailscaled` (`sudo tailscale up` once to authenticate)   |
+| `omp`       | oh-my-pi (`omp`) coding agent from upstream releases + a symlinked `~/.omp/agent/config.yml` |
 
-The file-symlinking roles (`zsh`, `cli`, `git`, `neovim`) mean editing the live
-file edits the tracked repo file — customise once, then `dotfiles commit`.
+The file-symlinking roles (`zsh`, `cli`, `git`, `neovim`, `omp`) mean editing the
+live file edits the tracked repo file — customise once, then `dotfiles commit`.
 
 ## Secrets (Bitwarden)
 
@@ -171,5 +172,5 @@ bin/dotfiles    the dotfiles command (symlinked onto PATH by the cli role)
 bootstrap.sh    install prerequisites on a fresh host
 site.yml        the playbook — common baseline, then per-host additional_roles
 inventory/      hosts.yml, group_vars/ (common + per-family), host_vars/
-roles/          common, zsh, cli, git, neovim, bitwarden, k8s-tools, upstream-tools, docker, tailscale
+roles/          common, zsh, cli, git, neovim, bitwarden, k8s-tools, upstream-tools, docker, tailscale, omp
 ```
