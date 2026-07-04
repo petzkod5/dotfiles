@@ -1,31 +1,32 @@
 import type { ExtensionAPI, AgentToolResult } from "@oh-my-pi/pi-coding-agent";
-import type { CommitResult, GateAction } from "./src/types.ts";
+import type { Component } from "@oh-my-pi/pi-tui";
+import type { CommitResult, CommitState, GateAction } from "./src/types.ts";
 import { isGitRepo, commit, unstageFiles } from "./src/git.ts";
 import { createInitialState, runCommitWorkflow } from "./src/workflow.ts";
-import { createStatusView } from "./src/status-view.ts";
+import { createStatusView, renderCommitBox } from "./src/status-view.ts";
 
-function toCommitToolResult(r: CommitResult): AgentToolResult {
+function snapshotState(state: CommitState): CommitState {
+  return {
+    ...state,
+    stages: state.stages.map((s) => ({ ...s })),
+    usage: { ...state.usage },
+  };
+}
+
+function toCommitToolResult(r: CommitResult, state: CommitState): AgentToolResult {
+  const details = snapshotState(state);
   switch (r.status) {
     case "committed":
-      return {
-        content: [{ type: "text", text: `Committed ${r.commitHash}: ${r.message}` }],
-        details: { commitHash: r.commitHash, message: r.message },
-      };
+      return { content: [{ type: "text", text: `Committed ${r.commitHash}: ${r.message}` }], details };
     case "clean":
-      return {
-        content: [{ type: "text", text: "Nothing to commit — working tree clean." }],
-        details: { clean: true },
-      };
+      return { content: [{ type: "text", text: "Nothing to commit — working tree clean." }], details };
     case "cancelled":
-      return {
-        content: [{ type: "text", text: "Commit cancelled before completion." }],
-        details: { cancelled: true },
-      };
+      return { content: [{ type: "text", text: "Commit cancelled before completion." }], details };
     default:
       return {
         content: [{ type: "text", text: `Commit failed: ${r.error ?? "unknown error"}` }],
         isError: true,
-        details: { error: r.error, failedStage: r.failedStage },
+        details,
       };
   }
 }
@@ -156,7 +157,7 @@ export default function activate(pi: ExtensionAPI): void {
     name: "commit",
     label: "Commit",
     description:
-      "Autonomously create a git commit: stage the on-topic files for one logical change, scan the staged changes for secrets with gitleaks, generate a Conventional Commits message with the pi/commit model, and commit — in a single pass. Shows the user a live status overlay when an interactive UI is present; never prompts the user for a decision. Use when committing work programmatically.",
+      "Autonomously create a git commit: stage the on-topic files for one logical change, scan the staged changes for secrets with gitleaks, generate a Conventional Commits message with the pi/commit model, and commit — in a single pass. Shows a live status view inline in the transcript (the editor/input line stays put); never prompts the user for a decision. Use when committing work programmatically.",
     approval: "write",
     parameters: pi.typebox.Type.Object({
       hint: pi.typebox.Type.Optional(
@@ -165,7 +166,7 @@ export default function activate(pi: ExtensionAPI): void {
         }),
       ),
     }),
-    async execute(_toolCallId, params, signal, _onUpdate, ctx): Promise<AgentToolResult> {
+    async execute(_toolCallId, params, signal, onUpdate, ctx): Promise<AgentToolResult> {
       if (!(await isGitRepo(pi, ctx.cwd))) {
         return { content: [{ type: "text", text: "Not inside a git repository." }], isError: true };
       }
@@ -176,51 +177,28 @@ export default function activate(pi: ExtensionAPI): void {
       const controller = new AbortController();
       signal?.addEventListener("abort", () => controller.abort(), { once: true });
       if (signal?.aborted) controller.abort();
-      const state = createInitialState();
-      const run = (repaint: () => void) =>
-        runCommitWorkflow(pi, ctx, state, repaint, controller.signal, { hint, yolo: true });
 
-      let result: CommitResult;
-      if (ctx.hasUI) {
-        // Same overlay the /commit command mounts; the agent (not the user)
-        // drives it, so there is no approval gate (yolo) and it auto-closes when done.
-        result = await ctx.ui.custom<CommitResult>(
-          (tui, theme, keybindings, done) => {
-            let final: CommitResult = { status: "cancelled" };
-            const view = createStatusView(
-              tui,
-              theme,
-              keybindings,
-              () => state,
-              () => controller.abort(), // onInterrupt: a watching human may Esc to cancel
-              () => done(final), // onDismiss
-              () => {}, // onApproval: unused (yolo — no gate)
-            );
-            const repaint = () => tui.requestComponentRender(view);
-            void run(repaint)
-              .then((r) => {
-                final = r;
-              })
-              .catch((err: unknown) => {
-                const m = err instanceof Error ? err.message : String(err);
-                final = { status: "failed", error: m };
-                state.error = m;
-                state.outcome = "failed";
-              })
-              .finally(() => {
-                state.done = true;
-                repaint();
-                done(final); // auto-close; the agent isn't waiting on a keypress
-              });
-            return view;
-          },
-          { overlay: true },
-        );
-      } else {
-        // No interactive UI (print/RPC): run headless with a no-op repaint.
-        result = await run(() => {});
+      const state = createInitialState();
+      // Stream the box inline (like every other tool) via onUpdate; the host
+      // re-renders renderResult and advances options.spinnerFrame. No overlay,
+      // so the editor / input line stays put while the agent runs.
+      const emit = () =>
+        onUpdate?.({ content: [{ type: "text", text: "Committing…" }], details: snapshotState(state) });
+      emit();
+      const result = await runCommitWorkflow(pi, ctx, state, emit, controller.signal, { hint, yolo: true });
+      state.done = true; // so the finalized inline block renders the outcome banner
+      return toCommitToolResult(result, state);
+    },
+    renderResult: (result, options, theme): Component => {
+      // `details` is the CommitState snapshot this tool always emits.
+      const state = result.details as CommitState | undefined;
+      if (!state || !Array.isArray(state.stages)) {
+        return { render: (): readonly string[] => [theme.fg("dim", "commit: starting…")] };
       }
-      return toCommitToolResult(result);
+      return {
+        render: (width: number): readonly string[] =>
+          renderCommitBox(state, theme, options.spinnerFrame ?? 0, width, false),
+      };
     },
   });
 }
