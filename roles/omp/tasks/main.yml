@@ -115,3 +115,64 @@
     dest: "{{ omp_extensions_dir }}/commit"
     state: link
     force: true
+
+# --- Symlink repo-tracked skills (all current + future) ---------------------
+# omp auto-discovers ~/.omp/agent/skills/<name>/SKILL.md; dir symlinks are
+# eligible. We find every top-level dir under files/skills/ and link each one
+# into omp_skills_dir so adding a new skill directory is all that's needed.
+
+- name: Ensure the omp skills directory exists
+  ansible.builtin.file:
+    path: "{{ omp_skills_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Discover role-provided skill directories
+  ansible.builtin.find:
+    paths: "{{ role_path }}/files/skills"
+    file_type: directory
+    recurse: false
+  register: _omp_skills
+
+- name: Stat each target skill entry in the skills dir
+  ansible.builtin.stat:
+    path: "{{ omp_skills_dir }}/{{ item.path | basename }}"
+  loop: "{{ _omp_skills.files }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+  register: _omp_skill_targets
+
+- name: Back up pre-existing real skill entries (once)
+  ansible.builtin.copy:
+    src: "{{ item.stat.path }}"
+    dest: "{{ item.stat.path }}.pre-ansible"
+    remote_src: true
+    force: false
+    mode: preserve
+  loop: "{{ _omp_skill_targets.results }}"
+  loop_control:
+    label: "{{ item.item.path | basename }}"
+  when:
+    - item.stat.exists
+    - not item.stat.islnk
+
+- name: Remove pre-existing real skill entries so symlink can replace them
+  ansible.builtin.file:
+    path: "{{ item.stat.path }}"
+    state: absent
+  loop: "{{ _omp_skill_targets.results }}"
+  loop_control:
+    label: "{{ item.item.path | basename }}"
+  when:
+    - item.stat.exists
+    - not item.stat.islnk
+
+- name: Symlink each role skill into the omp skills dir
+  ansible.builtin.file:
+    src: "{{ item.path }}"
+    dest: "{{ omp_skills_dir }}/{{ item.path | basename }}"
+    state: link
+    force: true
+  loop: "{{ _omp_skills.files }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
