@@ -18,7 +18,16 @@ export type Outcome = "committed" | "failed" | "cancelled" | "clean";
 export type ResultStatus = Outcome | "edit-requested";
 
 /** In-overlay approval-gate decision. */
-export type GateAction = "commit" | "edit" | "abort";
+export type GateAction = "commit" | "edit" | "abort" | "regenerate";
+
+/** Accumulated model usage across every model call (incl. discarded drafts). */
+export interface UsageTotals {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  /** USD; sum of AssistantMessage.usage.cost.total across calls. */
+  cost: number;
+}
 
 export interface Stage {
   id: StageId;
@@ -27,6 +36,10 @@ export interface Stage {
   status: StageStatus;
   /** Detail line shown after the label. */
   subtitle?: string;
+  /** Epoch ms when the stage entered "in-progress" (for a live running timer). */
+  startedAtMs?: number;
+  /** Wall-clock duration of the stage's last run (ms). Set on done/failed. */
+  elapsedMs?: number;
 }
 
 export interface CommitState {
@@ -44,6 +57,8 @@ export interface CommitState {
   error?: string;
   /** True while paused in the in-overlay approval gate (skipped with --yolo). */
   awaitingApproval: boolean;
+  /** Running total of model token usage + cost (shown in the footer). */
+  usage: UsageTotals;
 }
 
 export interface CommitResult {

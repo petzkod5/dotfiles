@@ -7,6 +7,13 @@ import {
   truncateVisible,
 } from "./icons.ts";
 
+// ─── Elapsed-time formatter ───────────────────────────────────────────────────
+
+/** Format a duration (ms) as a compact seconds string, e.g. "0.4s" or "1.2s". */
+function formatElapsed(ms: number): string {
+  return `${(ms / 1000).toFixed(1)}s`;
+}
+
 // ─── Footer builder ──────────────────────────────────────────────────────────
 
 /**
@@ -20,7 +27,7 @@ function buildFooter(
   theme: Theme,
 ): string {
   if (state.awaitingApproval) {
-    const hint = "\u21b5 commit   e edit   esc abort";
+    const hint = "\u21b5 commit  e edit  r regen  q abort";
     return theme.fg("dim", truncateVisible(hint, maxWidth));
   }
   if (!state.done) {
@@ -100,12 +107,14 @@ export const createStatusView: CreateStatusView = (
     const state = getState();
 
     const sig = JSON.stringify({
-      stages: state.stages.map((s) => ({ status: s.status, subtitle: s.subtitle })),
+      stages: state.stages.map((s) => ({ status: s.status, subtitle: s.subtitle, startedAtMs: s.startedAtMs, elapsedMs: s.elapsedMs })),
       done: state.done,
       outcome: state.outcome,
       awaitingApproval: state.awaitingApproval,
       frame: frameIdx,
       width,
+      usageTotalTokens: state.usage.totalTokens,
+      usageCost: state.usage.cost,
     });
 
     if (sig === cachedSig) return cachedLines;
@@ -133,18 +142,29 @@ export const createStatusView: CreateStatusView = (
     );
 
     // ── Stage rows ───────────────────────────────────────────────────────────
-    // Row: "  " + icon + " " + label + optional(" — " + subtitle) + trailing
+    // Row: "  " + icon + " " + label + optional(" — " + subtitle) + optional(" " + timer) + trailing
     // Total content between │..│ = width - 2 chars
     for (const stage of state.stages) {
       const icon = stageIcon(theme, stage.status, frame);
       const isActive = stage.status === "in-progress";
       const isFailed = stage.status === "failed";
 
+      // Compute elapsed timer string (unstyled, for budget math)
+      let timerStr = "";
+      if (isActive && stage.startedAtMs != null) {
+        timerStr = formatElapsed(Date.now() - stage.startedAtMs);
+      } else if (stage.elapsedMs != null) {
+        timerStr = formatElapsed(stage.elapsedMs);
+      }
+      const timerW = timerStr.length; // plain ASCII, no ANSI, safe to use .length
+      // Space before timer: " " (1 char) when timer is present
+      const timerReserve = timerW > 0 ? 1 + timerW : 0;
+
       const labelW = visibleWidth(stage.label);
       // Chars already consumed in the innerWidth budget (after "  "):
       //   icon(1) + " "(1) + label(labelW) = 2 + labelW
-      // Separator " — " costs 3; subtitle gets the rest
-      const subtitleBudget = Math.max(0, innerWidth - (2 + labelW) - 3);
+      // Separator " — " costs 3; timer reserve is subtracted from remaining budget
+      const subtitleBudget = Math.max(0, innerWidth - (2 + labelW) - 3 - timerReserve);
 
       const styledLabel = isActive
         ? theme.bold(theme.fg("text", stage.label))
@@ -162,6 +182,11 @@ export const createStatusView: CreateStatusView = (
         rowRawW += 3 + visibleWidth(truncSub);
       }
 
+      if (timerW > 0) {
+        rowStr += " " + theme.fg("dim", timerStr);
+        rowRawW += 1 + timerW;
+      }
+
       // Pad to fill the full content area between borders (width - 2 chars total)
       const trailing = Math.max(0, contentWidth - rowRawW);
       lines.push(borderV + rowStr + " ".repeat(trailing) + borderV);
@@ -169,6 +194,15 @@ export const createStatusView: CreateStatusView = (
 
     // ── Blank separator row ──────────────────────────────────────────────────
     lines.push(borderV + " ".repeat(contentWidth) + borderV);
+
+    // ── Usage footer (tokens + cost) — only when model has been called ───────
+    if (state.usage.totalTokens > 0) {
+      const usageText = `${state.usage.totalTokens.toLocaleString()} tok · $${state.usage.cost.toFixed(4)}`;
+      const truncUsage = truncateVisible(usageText, innerWidth);
+      const usageStyled = theme.fg("muted", truncUsage);
+      const usageTrailing = Math.max(0, innerWidth - visibleWidth(truncUsage));
+      lines.push(borderV + "  " + usageStyled + " ".repeat(usageTrailing) + borderV);
+    }
 
     // ── Footer hint row ──────────────────────────────────────────────────────
     // Layout: │ + "  " + footerText + trailing + │
@@ -206,7 +240,8 @@ export const createStatusView: CreateStatusView = (
       if (s.awaitingApproval) {
         if (data === "\r" || data === "\n") onApproval("commit");
         else if (data === "e" || data === "E") onApproval("edit");
-        else if (keybindings.matches(data, "app.interrupt") || data === "\x03") onApproval("abort");
+        else if (data === "r" || data === "R") onApproval("regenerate");
+        else if (data === "q" || data === "Q" || data === "\x1b" || keybindings.matches(data, "app.interrupt") || data === "\x03") onApproval("abort");
         return;
       }
       if (keybindings.matches(data, "app.interrupt") || data === "\x03") onInterrupt();

@@ -106,6 +106,38 @@ export async function stagedFileList(pi: ExtensionAPI, cwd: string): Promise<str
   return r.stdout.split("\n").filter((l) => l.length > 0);
 }
 
+/**
+ * Returns insertion/deletion statistics for the current staged diff.
+ * Runs `git diff --cached --numstat`; binary files contribute 0 to each sum.
+ * Returns `{files:0,insertions:0,deletions:0}` on non-zero exit (no throw).
+ */
+export async function diffStat(
+  pi: ExtensionAPI,
+  cwd: string,
+  signal?: AbortSignal,
+): Promise<{ files: number; insertions: number; deletions: number }> {
+  const r = await pi.exec(
+    "git",
+    ["-c", "core.quotepath=false", "diff", "--cached", "--numstat"],
+    { cwd, signal },
+  );
+  if (r.code !== 0) return { files: 0, insertions: 0, deletions: 0 };
+
+  const lines = r.stdout.split("\n").filter((l) => l.trim().length > 0);
+  let insertions = 0;
+  let deletions = 0;
+  for (const line of lines) {
+    const parts = line.split("\t");
+    if (parts.length < 2) continue;
+    // Binary files show "-" for both add and del counts
+    const add = parts[0] === "-" ? 0 : parseInt(parts[0], 10);
+    const del = parts[1] === "-" ? 0 : parseInt(parts[1], 10);
+    if (!isNaN(add)) insertions += add;
+    if (!isNaN(del)) deletions += del;
+  }
+  return { files: lines.length, insertions, deletions };
+}
+
 /** Commits the staged changes and returns the short HEAD hash. */
 export async function commit(
   pi: ExtensionAPI,

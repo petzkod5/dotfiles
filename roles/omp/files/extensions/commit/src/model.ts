@@ -1,4 +1,5 @@
 import type { ExtensionAPI, ExtensionCommandContext } from "@oh-my-pi/pi-coding-agent";
+import type { UsageTotals } from "./types.ts";
 
 export interface FileSelectionInput {
   hint: string;
@@ -13,6 +14,18 @@ export interface MessageInput {
   stagedDiff: string;
 }
 
+/** Thrown by generateCommitMessage when the model fails to produce a valid
+ *  message after one retry. Carries the usage spent across both attempts so
+ *  the caller can still account for it before failing the stage. */
+export class CommitMessageError extends Error {
+  readonly usage: UsageTotals;
+  constructor(message: string, usage: UsageTotals) {
+    super(message);
+    this.name = "CommitMessageError";
+    this.usage = usage;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Private helpers
 // ---------------------------------------------------------------------------
@@ -20,6 +33,7 @@ export interface MessageInput {
 /**
  * Spins up a minimal in-memory agent session for a single-shot formatter call.
  * Uses disableExtensionDiscovery:true to prevent recursive self-load.
+ * Returns both the trimmed text output and accumulated token/cost usage.
  */
 async function runFormatterModel(
   pi: ExtensionAPI,
@@ -27,7 +41,7 @@ async function runFormatterModel(
   systemPrompt: string,
   userPrompt: string,
   signal?: AbortSignal,
-): Promise<string> {
+): Promise<{ text: string; usage: UsageTotals }> {
   // Model type inferred from resolve() — no @oh-my-pi/pi-ai import needed
   const model = ctx.models.resolve("pi/commit");
   if (!model) throw new Error("pi/commit model unavailable");
@@ -51,9 +65,18 @@ async function runFormatterModel(
   signal?.addEventListener("abort", onAbort, { once: true });
 
   let out = "";
+  const acc: UsageTotals = { inputTokens: 0, outputTokens: 0, totalTokens: 0, cost: 0 };
+
   const unsub = session.subscribe((e) => {
     if (e.type === "message_update" && e.assistantMessageEvent.type === "text_delta") {
       out += e.assistantMessageEvent.delta;
+    }
+    if (e.type === "message_end" && e.message.role === "assistant") {
+      const u = e.message.usage;
+      acc.inputTokens += u.input ?? 0;
+      acc.outputTokens += u.output ?? 0;
+      acc.totalTokens += u.totalTokens ?? 0;
+      acc.cost += u.cost?.total ?? 0;
     }
   });
 
@@ -66,7 +89,7 @@ async function runFormatterModel(
   }
 
   if (signal?.aborted) throw new Error("cancelled");
-  return out.trim();
+  return { text: out.trim(), usage: acc };
 }
 
 /**
@@ -133,14 +156,14 @@ function parseCommitLine(raw: string): string | null {
 
 /**
  * Asks the model to pick the on-topic subset of changed files to stage.
- * Returns a list of file paths (subset of input.candidates).
+ * Returns the selected file paths (subset of input.candidates) and usage totals.
  */
 export async function selectFilesToStage(
   pi: ExtensionAPI,
   ctx: ExtensionCommandContext,
   input: FileSelectionInput,
   signal?: AbortSignal,
-): Promise<string[]> {
+): Promise<{ files: string[]; usage: UsageTotals }> {
   const systemPrompt =
     "You are a git commit file selector. Given changed files and a diff, choose ONLY the files that form ONE coherent, on-topic commit. Respond with ONLY a JSON array of file-path strings — no prose, no markdown, no code fences. If a topic hint is given, prefer files matching it. If everything belongs together, return them all.";
 
@@ -159,20 +182,21 @@ export async function selectFilesToStage(
     "Return a JSON array of the file paths to stage.",
   ].join("\n");
 
-  const raw = await runFormatterModel(pi, ctx, systemPrompt, userPrompt, signal);
-  return parseFileList(raw, input.candidates);
+  const { text: raw, usage } = await runFormatterModel(pi, ctx, systemPrompt, userPrompt, signal);
+  return { files: parseFileList(raw, input.candidates), usage };
 }
 
 /**
  * Generates a single-line Conventional Commits message from the staged diff.
  * Validates the output; re-prompts once on failure. Throws if still invalid.
+ * Usage is summed across BOTH calls when the retry path is taken.
  */
 export async function generateCommitMessage(
   pi: ExtensionAPI,
   ctx: ExtensionCommandContext,
   input: MessageInput,
   signal?: AbortSignal,
-): Promise<string> {
+): Promise<{ message: string; usage: UsageTotals }> {
   const systemPrompt =
     "You are a Conventional Commits v1.0.0 message generator. Output EXACTLY ONE line: `type(scope): description` — lowercase type from {feat,fix,docs,style,refactor,perf,test,build,ci,chore,revert}, imperative mood, no trailing period, <=72 chars. No body, no quotes, no code fences, no explanation.";
 
@@ -186,18 +210,30 @@ export async function generateCommitMessage(
     "Output the single-line commit message.",
   ].join("\n");
 
-  const raw = await runFormatterModel(pi, ctx, systemPrompt, userPrompt, signal);
+  const { text: raw, usage } = await runFormatterModel(pi, ctx, systemPrompt, userPrompt, signal);
   const line = parseCommitLine(raw);
-  if (line !== null) return line;
+  if (line !== null) return { message: line, usage };
 
   // One re-prompt on invalid output
   const retryPrompt =
     userPrompt +
     "\n\nPrevious output was not a valid Conventional Commits line. Return ONLY the corrected single line.";
 
-  const raw2 = await runFormatterModel(pi, ctx, systemPrompt, retryPrompt, signal);
+  const { text: raw2, usage: usage2 } = await runFormatterModel(pi, ctx, systemPrompt, retryPrompt, signal);
   const line2 = parseCommitLine(raw2);
-  if (line2 !== null) return line2;
 
-  throw new Error("model did not produce a valid Conventional Commits message");
+  // Sum usage across both calls regardless of outcome
+  const totalUsage: UsageTotals = {
+    inputTokens: usage.inputTokens + usage2.inputTokens,
+    outputTokens: usage.outputTokens + usage2.outputTokens,
+    totalTokens: usage.totalTokens + usage2.totalTokens,
+    cost: usage.cost + usage2.cost,
+  };
+
+  if (line2 !== null) return { message: line2, usage: totalUsage };
+
+  throw new CommitMessageError(
+    "model did not produce a valid Conventional Commits message",
+    totalUsage,
+  );
 }
