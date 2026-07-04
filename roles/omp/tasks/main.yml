@@ -84,6 +84,34 @@
     state: link
     force: true
 
+# --- Symlink the repo-tracked RULES.md (user-level sticky rules) -------------
+# omp loads ~/.omp/agent/RULES.md as an always-apply sticky rule. Same
+# stat -> backup-once -> link idempotency as the config symlink above; the
+# agent dir is already ensured by the config block.
+
+- name: Check for an existing omp RULES.md
+  ansible.builtin.stat:
+    path: "{{ omp_rules_file }}"
+  register: _omp_rules
+
+- name: Back up a pre-existing real omp RULES.md (once)
+  ansible.builtin.copy:
+    src: "{{ omp_rules_file }}"
+    dest: "{{ omp_rules_file }}.pre-ansible"
+    remote_src: true
+    force: false
+    mode: preserve
+  when:
+    - _omp_rules.stat.exists
+    - not _omp_rules.stat.islnk
+
+- name: Symlink the omp RULES.md to the repo-tracked file
+  ansible.builtin.file:
+    src: "{{ role_path }}/files/RULES.md"
+    dest: "{{ omp_rules_file }}"
+    state: link
+    force: true
+
 # --- Symlink the /commit extension ------------------------------------------
 # omp auto-discovers ~/.omp/agent/extensions/<dir>; a dir symlink is eligible
 # (see extension-loading docs). Mirrors the config symlink idempotency style.
