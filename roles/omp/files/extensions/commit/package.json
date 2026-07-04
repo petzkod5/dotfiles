@@ -1,0 +1,13 @@
+{
+  "name": "omp-commit-ext",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "omp": { "extensions": ["./index.ts"] },
+  "devDependencies": {
+    "@oh-my-pi/pi-coding-agent": "16.3.0",
+    "@oh-my-pi/pi-tui": "16.3.0",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  }
+}
