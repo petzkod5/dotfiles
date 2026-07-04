@@ -23,7 +23,7 @@ export async function isGitRepo(pi: ExtensionAPI, cwd: string): Promise<boolean>
 export async function listChangedFiles(pi: ExtensionAPI, cwd: string): Promise<ChangedFile[]> {
   const r = await pi.exec(
     "git",
-    ["-c", "core.quotepath=false", "status", "--porcelain=v1", "-z"],
+    ["-c", "core.quotepath=false", "status", "--porcelain=v1", "--untracked-files=all", "-z"],
     { cwd },
   );
   if (r.code !== 0 || !r.stdout) return [];
@@ -53,7 +53,7 @@ export async function listChangedFiles(pi: ExtensionAPI, cwd: string): Promise<C
 export async function statusText(pi: ExtensionAPI, cwd: string): Promise<string> {
   const r = await pi.exec(
     "git",
-    ["-c", "core.quotepath=false", "status", "--porcelain=v1"],
+    ["-c", "core.quotepath=false", "status", "--porcelain=v1", "--untracked-files=all"],
     { cwd },
   );
   return r.stdout;
