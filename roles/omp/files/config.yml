@@ -15,8 +15,13 @@ defaultThinkingLevel: auto
 task: 
   eager: preferred
 memory: 
-  backend: local
+  backend: mnemopi
 autolearn: 
   enabled: true
 compaction: 
   strategy: snapcompact
+advisor: 
+  enabled: true
+autoResume: true
+startup: 
+  quiet: true

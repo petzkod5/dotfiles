@@ -81,3 +81,9 @@ desktop.ini
 *.bak
 *.tmp
 *.orig
+
+# --- omp extension build artifacts (devDeps only; runtime uses type-only imports) ---
+roles/omp/files/extensions/**/node_modules/
+roles/omp/files/extensions/**/bun.lock
+roles/omp/files/extensions/**/bun.lockb
+roles/omp/files/extensions/**/.bun/

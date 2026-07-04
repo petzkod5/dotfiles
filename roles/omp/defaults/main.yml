@@ -33,3 +33,6 @@ omp_lib_dir: "{{ omp_home }}/.local/lib/omp"
 # --- Version-controlled config (symlinked into place) ------------------------
 omp_config_dir: "{{ omp_home }}/.omp/agent"
 omp_config_file: "{{ omp_config_dir }}/config.yml"
+
+# --- /commit extension (symlinked into the agent extensions dir) ------------
+omp_extensions_dir: "{{ omp_config_dir }}/extensions"

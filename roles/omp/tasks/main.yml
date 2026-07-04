@@ -83,3 +83,35 @@
     dest: "{{ omp_config_file }}"
     state: link
     force: true
+
+# --- Symlink the /commit extension ------------------------------------------
+# omp auto-discovers ~/.omp/agent/extensions/<dir>; a dir symlink is eligible
+# (see extension-loading docs). Mirrors the config symlink idempotency style.
+
+- name: Ensure the omp extensions directory exists
+  ansible.builtin.file:
+    path: "{{ omp_extensions_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Check for an existing commit extension entry
+  ansible.builtin.stat:
+    path: "{{ omp_extensions_dir }}/commit"
+  register: _omp_commit_ext
+
+- name: Back up a pre-existing real commit extension (once)
+  ansible.builtin.copy:
+    src: "{{ omp_extensions_dir }}/commit"
+    dest: "{{ omp_extensions_dir }}/commit.pre-ansible"
+    remote_src: true
+    force: false
+  when:
+    - _omp_commit_ext.stat.exists
+    - not _omp_commit_ext.stat.islnk
+
+- name: Symlink the commit extension into the omp extensions dir
+  ansible.builtin.file:
+    src: "{{ role_path }}/files/extensions/commit"
+    dest: "{{ omp_extensions_dir }}/commit"
+    state: link
+    force: true
