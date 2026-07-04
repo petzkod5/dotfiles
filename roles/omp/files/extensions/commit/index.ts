@@ -185,11 +185,21 @@ export default function activate(pi: ExtensionAPI): void {
       const emit = () =>
         onUpdate?.({ content: [{ type: "text", text: "Committing…" }], details: snapshotState(state) });
       emit();
-      const result = await runCommitWorkflow(pi, ctx, state, emit, controller.signal, { hint, yolo: true });
-      state.done = true; // so the finalized inline block renders the outcome banner
+      // Re-emit on a timer so the spinner + live per-stage elapsed animate while a
+      // stage is in flight — the host does not repaint a custom renderResult block
+      // between state changes. Cleared once the workflow settles.
+      const ticker = setInterval(emit, 100);
+      let result: CommitResult;
+      try {
+        result = await runCommitWorkflow(pi, ctx, state, emit, controller.signal, { hint, yolo: true });
+      } finally {
+        clearInterval(ticker);
+        state.done = true; // stop ticking + let the finalized block render the outcome banner
+        emit();
+      }
       return toCommitToolResult(result, state);
     },
-    renderResult: (result, options, theme): Component => {
+    renderResult: (result, _options, theme): Component => {
       // `details` is the CommitState snapshot this tool always emits.
       const state = result.details as CommitState | undefined;
       if (!state || !Array.isArray(state.stages)) {
@@ -197,7 +207,7 @@ export default function activate(pi: ExtensionAPI): void {
       }
       return {
         render: (width: number): readonly string[] =>
-          renderCommitBox(state, theme, options.spinnerFrame ?? 0, width, false),
+          renderCommitBox(state, theme, Math.floor(Date.now() / 80), width, false),
       };
     },
   });
