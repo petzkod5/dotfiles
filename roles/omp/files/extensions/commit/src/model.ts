@@ -1,4 +1,4 @@
-import type { ExtensionAPI, ExtensionCommandContext } from "@oh-my-pi/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent";
 import type { UsageTotals } from "./types.ts";
 
 export interface FileSelectionInput {
@@ -37,7 +37,7 @@ export class CommitMessageError extends Error {
  */
 async function runFormatterModel(
   pi: ExtensionAPI,
-  ctx: ExtensionCommandContext,
+  ctx: ExtensionContext,
   systemPrompt: string,
   userPrompt: string,
   signal?: AbortSignal,
@@ -160,7 +160,7 @@ function parseCommitLine(raw: string): string | null {
  */
 export async function selectFilesToStage(
   pi: ExtensionAPI,
-  ctx: ExtensionCommandContext,
+  ctx: ExtensionContext,
   input: FileSelectionInput,
   signal?: AbortSignal,
 ): Promise<{ files: string[]; usage: UsageTotals }> {
@@ -193,7 +193,7 @@ export async function selectFilesToStage(
  */
 export async function generateCommitMessage(
   pi: ExtensionAPI,
-  ctx: ExtensionCommandContext,
+  ctx: ExtensionContext,
   input: MessageInput,
   signal?: AbortSignal,
 ): Promise<{ message: string; usage: UsageTotals }> {

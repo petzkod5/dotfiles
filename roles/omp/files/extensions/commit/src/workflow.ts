@@ -6,7 +6,7 @@ import type {
   UsageTotals,
   WorkflowOptions,
 } from "./types.ts";
-import type { ExtensionAPI, ExtensionCommandContext } from "@oh-my-pi/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent";
 import * as git from "./git.ts";
 import { selectFilesToStage, generateCommitMessage, CommitMessageError } from "./model.ts";
 
@@ -63,7 +63,7 @@ function addUsage(state: CommitState, u: UsageTotals): void {
  */
 export async function runCommitWorkflow(
   pi: ExtensionAPI,
-  ctx: ExtensionCommandContext,
+  ctx: ExtensionContext,
   state: CommitState,
   repaint: Repaint,
   signal: AbortSignal,

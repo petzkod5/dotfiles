@@ -1,6 +1,6 @@
 import type {
   ExtensionAPI,
-  ExtensionCommandContext,
+  ExtensionContext,
   ExtensionUiComponent,
   Theme,
   KeybindingsManager,
@@ -87,7 +87,7 @@ export type Repaint = () => void;
 /** SEAM: implemented in src/workflow.ts */
 export type RunCommitWorkflow = (
   pi: ExtensionAPI,
-  ctx: ExtensionCommandContext,
+  ctx: ExtensionContext,
   state: CommitState,
   repaint: Repaint,
   signal: AbortSignal,

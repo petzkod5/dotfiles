@@ -7,9 +7,11 @@ description: Use when creating a git commit — covers on-topic staging, secret 
 
 Whenever you need to commit work: staging files, verifying safety, and writing the commit message.
 
-## Prefer the `/commit` extension
+## Prefer the built-in commit flow
 
-ALWAYS run the built-in `/commit` slash-command first. It performs this entire flow — staging only on-topic files, scanning the staged changes for secrets with gitleaks, and generating a Conventional Commits message via the `pi/commit` model — in a guided TUI. Only fall back to the manual procedure below when `/commit` is unavailable or you must commit non-interactively.
+If you are an agent, ALWAYS call the `commit` tool first. It runs this entire flow — staging only on-topic files, scanning the staged changes for secrets with gitleaks, and generating a Conventional Commits message via the `pi/commit` model — autonomously in one pass, while showing the user the same live status overlay. Pass an optional `hint` describing the change to guide file selection.
+
+The `/commit` slash-command is the human's interactive equivalent (it adds a review gate). Only fall back to the manual git procedure below if the `commit` tool is unavailable.
 
 ## Manual procedure (fallback)
 
