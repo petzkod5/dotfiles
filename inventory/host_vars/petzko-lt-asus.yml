@@ -38,7 +38,7 @@ additional_roles:
   - neovim
   - libreoffice
   - k8s-tools
-  - omp
+  - petzko.omp.omp_full
 
 # --- Secrets from Bitwarden (bitwarden role: via additional_roles or `dotfiles secrets`)
 # Credentials are prompted at runtime (see README); these lists declare what to

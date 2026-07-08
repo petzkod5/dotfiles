@@ -141,10 +141,12 @@ The most common edits:
 | `upstream-tools` | dev CLIs from upstream releases where apt lacks them (lazygit, gitleaks, fnm, uv) |
 | `docker`         | Docker Engine + Compose; daemon enabled, user added to `docker` |
 | `tailscale`      | Tailscale + `tailscaled` (`sudo tailscale up` once to authenticate) |
-| `omp`            | oh-my-pi (`omp`) coding agent + symlinked config, RULES.md, AGENTS.md |
+| `petzko.omp.omp_full` | external `petzko.omp` collection role: OMP binary + copied config, RULES.md, AGENTS.md, `/commit` extension |
 
-The file-symlinking roles (`zsh`, `cli`, `git`, `neovim`, `omp`) mean editing the
-live file edits the tracked repo file — customise once, then `dotfiles commit`.
+The file-symlinking roles (`zsh`, `cli`, `git`, `neovim`) mean editing the live
+file edits the tracked repo file — customise once, then `dotfiles commit`. The
+external `petzko.omp` collection copies OMP files into `~/.omp/agent` instead of
+linking back to this repo.
 
 ## Secrets (Bitwarden)
 
@@ -173,5 +175,5 @@ bin/dotfiles    the dotfiles command (symlinked onto PATH by the cli role)
 bootstrap.sh    install prerequisites on a fresh host
 site.yml        the playbook — common baseline, then per-host additional_roles
 inventory/      hosts.yml, group_vars/ (common + per-family), host_vars/
-roles/          common, zsh, cli, git, neovim, libreoffice, bitwarden, k8s-tools, upstream-tools, docker, tailscale, omp
+roles/          common, zsh, cli, git, neovim, libreoffice, bitwarden, k8s-tools, upstream-tools, docker, tailscale
 ```
