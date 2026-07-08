@@ -73,6 +73,7 @@
     dest: "{{ omp_config_file }}.pre-ansible"
     remote_src: true
     force: false
+    mode: preserve
   when:
     - _omp_cfg.stat.exists
     - not _omp_cfg.stat.islnk
@@ -81,6 +82,34 @@
   ansible.builtin.file:
     src: "{{ role_path }}/files/config.yml"
     dest: "{{ omp_config_file }}"
+    state: link
+    force: true
+
+# --- Symlink the repo-tracked AGENTS.md (user-level native OMP context) -------
+# OMP loads ~/.omp/agent/AGENTS.md as global user context. Same stat ->
+# backup-once -> link idempotency as the config symlink above; the agent dir is
+# already ensured by the config block.
+
+- name: Check for an existing omp AGENTS.md
+  ansible.builtin.stat:
+    path: "{{ omp_agents_file }}"
+  register: _omp_agents
+
+- name: Back up a pre-existing real omp AGENTS.md (once)
+  ansible.builtin.copy:
+    src: "{{ omp_agents_file }}"
+    dest: "{{ omp_agents_file }}.pre-ansible"
+    remote_src: true
+    force: false
+    mode: preserve
+  when:
+    - _omp_agents.stat.exists
+    - not _omp_agents.stat.islnk
+
+- name: Symlink the omp AGENTS.md to the repo-tracked file
+  ansible.builtin.file:
+    src: "{{ role_path }}/files/AGENTS.md"
+    dest: "{{ omp_agents_file }}"
     state: link
     force: true
 
@@ -133,6 +162,7 @@
     dest: "{{ omp_extensions_dir }}/commit.pre-ansible"
     remote_src: true
     force: false
+    mode: preserve
   when:
     - _omp_commit_ext.stat.exists
     - not _omp_commit_ext.stat.islnk
