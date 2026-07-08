@@ -1,0 +1,14 @@
+---
+# =============================================================================
+# libreoffice role — install the LibreOffice desktop office suite.
+# Arch/CachyOS uses the Fresh branch; Debian/Ubuntu/Fedora use their distro
+# suite metapackages. Optional dictionaries, fonts, Java support, and extensions
+# stay out of the default install to avoid surprising bloat.
+# =============================================================================
+libreoffice_packages_debian:
+  - libreoffice
+  - libreoffice-gtk3
+libreoffice_packages_archlinux:
+  - libreoffice-fresh
+libreoffice_packages_redhat:
+  - libreoffice

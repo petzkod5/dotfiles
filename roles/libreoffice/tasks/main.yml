@@ -1,0 +1,27 @@
+---
+# Install LibreOffice from distro packages. This role is normally reached from
+# additional_roles, whose play runs become:false, so each package task escalates
+# explicitly.
+
+- name: Install LibreOffice (Debian)
+  ansible.builtin.apt:
+    name: "{{ libreoffice_packages_debian }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  become: true
+  when: ansible_facts['os_family'] == 'Debian'
+
+- name: Install LibreOffice (Archlinux)
+  community.general.pacman:
+    name: "{{ libreoffice_packages_archlinux }}"
+    state: present
+  become: true
+  when: ansible_facts['os_family'] == 'Archlinux'
+
+- name: Install LibreOffice (RedHat)
+  ansible.builtin.dnf:
+    name: "{{ libreoffice_packages_redhat }}"
+    state: present
+  become: true
+  when: ansible_facts['os_family'] == 'RedHat'
