@@ -135,6 +135,7 @@ The most common edits:
 | `cli`            | symlinks the `dotfiles` command onto PATH + its config     |
 | `git`            | a symlinked `~/.gitconfig`                                 |
 | `neovim`         | Neovim + AstroNvim; aliases `vim`/`vi` → nvim, `$EDITOR=nvim` |
+| `herdr`         | Herdr agent multiplexer binary + standard default config   |
 | `libreoffice`    | LibreOffice desktop office suite from distro packages      |
 | `bitwarden`      | pulls SSH keys / notes / files from your Bitwarden vault   |
 | `k8s-tools`      | Kubernetes CLI tooling from upstream releases (kubectl, helm, helmfile, k9s, kind, minikube, sops, age, talosctl) |
@@ -175,5 +176,5 @@ bin/dotfiles    the dotfiles command (symlinked onto PATH by the cli role)
 bootstrap.sh    install prerequisites on a fresh host
 site.yml        the playbook — common baseline, then per-host additional_roles
 inventory/      hosts.yml, group_vars/ (common + per-family), host_vars/
-roles/          common, zsh, cli, git, neovim, libreoffice, bitwarden, k8s-tools, upstream-tools, docker, tailscale
+roles/          common, zsh, cli, git, neovim, herdr, libreoffice, bitwarden, k8s-tools, upstream-tools, docker, tailscale
 ```

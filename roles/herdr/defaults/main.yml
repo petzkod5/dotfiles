@@ -1,0 +1,18 @@
+---
+# =============================================================================
+# herdr role — install Herdr and manage its standard default config.
+# =============================================================================
+
+# Official installer endpoint. The installer downloads the current stable binary
+# from Herdr's release manifest.
+herdr_install_script_url: "https://herdr.dev/install.sh"
+
+# Per-user install path. The role resolves herdr_home at runtime because gathered
+# facts can report root's HOME after a become:true play.
+herdr_install_dir: "{{ herdr_home }}/.local/bin"
+herdr_binary_path: "{{ herdr_install_dir }}/herdr"
+
+# User config path documented by Herdr for Linux/macOS.
+herdr_config_dir: "{{ herdr_home }}/.config/herdr"
+herdr_config_file: "{{ herdr_config_dir }}/config.toml"
+

@@ -1,0 +1,72 @@
+---
+# Install Herdr with the official installer and manage its standard default config.
+# The role is reached from additional_roles (become:false), so this stays
+# per-user and does not write system paths.
+
+- name: Identify the target user
+  ansible.builtin.command:
+    cmd: id -un
+  register: _herdr_user
+  changed_when: false
+  check_mode: false
+
+- name: Look up the target user's home directory
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ _herdr_user.stdout }}"
+
+- name: Resolve the target user's home directory
+  ansible.builtin.set_fact:
+    herdr_home: "{{ ansible_facts.getent_passwd[_herdr_user.stdout][4] }}"
+
+- name: Ensure Herdr install directory exists
+  ansible.builtin.file:
+    path: "{{ herdr_install_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Install Herdr from the official installer
+  ansible.builtin.shell: >-
+    curl -fsSL {{ herdr_install_script_url | quote }} | sh
+  args:
+    executable: /bin/sh
+    creates: "{{ herdr_binary_path }}"
+  environment:
+    HERDR_INSTALL_DIR: "{{ herdr_install_dir }}"
+
+- name: Verify Herdr binary is present
+  ansible.builtin.stat:
+    path: "{{ herdr_binary_path }}"
+  register: herdr_binary
+
+- name: Fail when Herdr binary is missing
+  ansible.builtin.assert:
+    that:
+      - herdr_binary.stat.exists
+      - herdr_binary.stat.executable
+    fail_msg: "Herdr was not installed at {{ herdr_binary_path }}"
+    quiet: true
+  when: not ansible_check_mode or herdr_binary.stat.exists
+
+- name: Read Herdr default config
+  ansible.builtin.command:
+    argv:
+      - "{{ herdr_binary_path }}"
+      - "--default-config"
+  register: _herdr_default_config
+  changed_when: false
+  check_mode: false
+  when: herdr_binary.stat.exists
+
+- name: Ensure Herdr config directory exists
+  ansible.builtin.file:
+    path: "{{ herdr_config_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Manage Herdr config from Herdr defaults
+  ansible.builtin.copy:
+    dest: "{{ herdr_config_file }}"
+    content: "{{ _herdr_default_config.stdout }}\n"
+    mode: "0644"
+  when: herdr_binary.stat.exists

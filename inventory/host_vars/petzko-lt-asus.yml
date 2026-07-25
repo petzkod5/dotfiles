@@ -36,6 +36,7 @@ additional_roles:
   - cli
   - git
   - neovim
+  - herdr
   - libreoffice
   - k8s-tools
   - petzko.omp.omp_full
