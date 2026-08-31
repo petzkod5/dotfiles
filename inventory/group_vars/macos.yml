@@ -7,7 +7,8 @@ common_manage_etc_hosts: false
 common_manage_locale: false
 common_user_shell: /bin/zsh
 
-# Linux-specific package additions do not apply to Homebrew hosts.
-common_packages_family: []
+# Darwin-wide Homebrew formulae.
+common_packages_family:
+  - podman
 common_homebrew_casks_family:
   - discord

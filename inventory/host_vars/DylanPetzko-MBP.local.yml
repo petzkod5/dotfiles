@@ -7,6 +7,10 @@ common_hostname: "DylanPetzko-MBP.local"
 common_homebrew_casks_host:
   - bitwarden
 
+# Podman CLI complements the Darwin-wide Homebrew dependency.
+common_packages_host:
+  - podman
+
 # Every local opt-in role, ordered by dependency.
 additional_roles:
   - bitwarden
