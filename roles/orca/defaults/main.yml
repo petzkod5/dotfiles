@@ -5,7 +5,7 @@
 
 # Official Homebrew tap and cask for macOS/Darwin.
 orca_homebrew_tap_macos: stablyai/orca
-orca_cask_macos: orca
+orca_cask_macos: stablyai/orca/orca
 
 # Linux installs use Orca's official AppImage release assets. Keep the binary
 # versioned on disk, then expose a stable ~/.local/bin/orca launcher symlink.
