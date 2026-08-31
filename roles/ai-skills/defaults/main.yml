@@ -1,0 +1,52 @@
+---
+# =============================================================================
+# ai-skills role — install Matt Pocock's promoted agent skills for the user.
+# =============================================================================
+
+# Upstream release to install. Bump this tag to update the managed skills.
+ai_skills_repo_url: "https://github.com/mattpocock/skills.git"
+ai_skills_version: "v1.2.3"
+ai_skills_update: true
+
+# Runtime HOME is resolved in tasks/main.yml; these paths are evaluated after
+# ai_skills_home is set from `printenv HOME`.
+ai_skills_source_dir: "{{ ai_skills_home }}/.local/share/ai-skills/mattpocock-skills"
+
+# Default to OMP's user-authored skill directory and the Agent Skills canonical
+# global directory. Do not add ~/.claude/skills by default because upstream
+# recommends the Claude Code plugin and warns duplicate installs create every
+# skill twice. Hosts that intentionally avoid the Claude plugin can override this
+# list and add "{{ ai_skills_home }}/.claude/skills".
+ai_skills_destinations:
+  - "{{ ai_skills_home }}/.omp/agent/skills"
+  - "{{ ai_skills_home }}/.agents/skills"
+
+# Promoted skills copied from upstream .claude-plugin/plugin.json at v1.2.3.
+# Install whole directories, not just SKILL.md; agents/openai.yaml and sibling
+# docs/scripts are part of the skill payload.
+ai_skills_promoted_skill_paths:
+  - skills/engineering/ask-matt
+  - skills/engineering/diagnosing-bugs
+  - skills/engineering/grill-with-docs
+  - skills/engineering/triage
+  - skills/engineering/improve-codebase-architecture
+  - skills/engineering/setup-matt-pocock-skills
+  - skills/engineering/tdd
+  - skills/engineering/to-spec
+  - skills/engineering/to-tickets
+  - skills/engineering/wayfinder
+  - skills/engineering/implement
+  - skills/engineering/prototype
+  - skills/engineering/research
+  - skills/engineering/domain-modeling
+  - skills/engineering/codebase-design
+  - skills/engineering/code-review
+  - skills/engineering/resolving-merge-conflicts
+  - skills/engineering/wizard
+  - skills/productivity/grill-me
+  - skills/productivity/grilling
+  - skills/productivity/handoff
+  - skills/productivity/teach
+  - skills/productivity/to-questionnaire
+  - skills/productivity/wait-what
+  - skills/productivity/writing-for-agents

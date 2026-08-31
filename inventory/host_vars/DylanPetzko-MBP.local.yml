@@ -17,6 +17,7 @@ additional_roles:
   - zsh
   - cli
   - git
+  - ai-skills
   - neovim
   - herdr
   - libreoffice

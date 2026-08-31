@@ -1,0 +1,114 @@
+---
+# Install Matt Pocock's promoted skills as user-owned symlinks. Runs via the
+# additional_roles play (`become: false`) and writes only inside the login home.
+
+- name: Read the target user's home directory
+  ansible.builtin.command: printenv HOME
+  register: _ai_skills_home
+  changed_when: false
+  check_mode: false
+
+- name: Resolve the home directory
+  ansible.builtin.set_fact:
+    ai_skills_home: "{{ _ai_skills_home.stdout }}"
+
+- name: Ensure the AI skills source parent exists
+  ansible.builtin.file:
+    path: "{{ ai_skills_source_dir | dirname }}"
+    state: directory
+    mode: "0755"
+
+- name: Clone Matt Pocock's skills repository
+  ansible.builtin.git:
+    repo: "{{ ai_skills_repo_url }}"
+    dest: "{{ ai_skills_source_dir }}"
+    version: "{{ ai_skills_version }}"
+    depth: 1
+    update: "{{ ai_skills_update | bool }}"
+
+- name: Verify promoted upstream skill payloads exist
+  ansible.builtin.stat:
+    path: "{{ ai_skills_source_dir }}/{{ item }}/SKILL.md"
+  register: _ai_skills_source_skill_files
+  loop: "{{ ai_skills_promoted_skill_paths }}"
+  loop_control:
+    label: "{{ item }}"
+  when: not ansible_check_mode
+
+- name: Fail when the pinned upstream ref is missing a promoted skill
+  ansible.builtin.assert:
+    that:
+      - item.stat.exists | default(false)
+      - item.stat.isreg | default(false)
+    fail_msg: >-
+      Pinned mattpocock/skills ref {{ ai_skills_version }} is missing
+      {{ item.item }}/SKILL.md. Update ai_skills_promoted_skill_paths or pin a
+      ref that contains the promoted skill list.
+    quiet: true
+  loop: "{{ _ai_skills_source_skill_files.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: not ansible_check_mode
+
+- name: Check destination skill roots
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  register: _ai_skills_destination_roots
+  loop: "{{ ai_skills_destinations }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: Fail when a destination root is not a real directory
+  ansible.builtin.assert:
+    that:
+      - not (item.stat.islnk | default(false))
+      - not (item.stat.exists | default(false)) or (item.stat.isdir | default(false))
+    fail_msg: >-
+      Refusing to manage skill destination {{ item.item }} because it is not a
+      real directory. Move it aside or set ai_skills_destinations to a real
+      directory.
+    quiet: true
+  loop: "{{ _ai_skills_destination_roots.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: Ensure AI skill destination directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop: "{{ ai_skills_destinations }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: Check for existing unmanaged skill installs
+  ansible.builtin.stat:
+    path: "{{ item.0 }}/{{ item.1 | basename }}"
+  register: _ai_skills_existing_installs
+  loop: "{{ ai_skills_destinations | product(ai_skills_promoted_skill_paths) | list }}"
+  loop_control:
+    label: "{{ item.0 }}/{{ item.1 | basename }}"
+
+- name: Fail when a promoted skill destination is unmanaged
+  ansible.builtin.assert:
+    that:
+      - not (item.stat.exists | default(false)) or (item.stat.islnk | default(false))
+    fail_msg: >-
+      Refusing to replace existing non-symlink skill at
+      {{ item.item.0 }}/{{ item.item.1 | basename }}. Move it aside before
+      rerunning the ai-skills role.
+    quiet: true
+  loop: "{{ _ai_skills_existing_installs.results }}"
+  loop_control:
+    label: "{{ item.item.0 }}/{{ item.item.1 | basename }}"
+
+- name: Link promoted skills into AI skill destinations
+  ansible.builtin.file:
+    src: "{{ ai_skills_source_dir }}/{{ item.1 }}"
+    dest: "{{ item.0 }}/{{ item.1 | basename }}"
+    state: link
+    force: true
+  loop: "{{ ai_skills_destinations | product(ai_skills_promoted_skill_paths) | list }}"
+  loop_control:
+    label: "{{ item.0 }}/{{ item.1 | basename }}"
+  when: not ansible_check_mode

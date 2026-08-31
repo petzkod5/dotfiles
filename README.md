@@ -143,6 +143,7 @@ The most common edits:
 | `zsh`            | oh-my-zsh + a symlinked `~/.zshrc`                         |
 | `cli`            | symlinks the `dotfiles` command onto PATH + its config     |
 | `git`            | a symlinked `~/.gitconfig`                                 |
+| `ai-skills`      | Matt Pocock's promoted agent skills symlinked into user skill dirs |
 | `neovim`         | Neovim + AstroNvim; aliases `vim`/`vi` → nvim, `$EDITOR=nvim` |
 | `herdr`         | Herdr agent multiplexer binary + standard default config   |
 | `libreoffice`    | LibreOffice from distro packages on Linux; Homebrew cask on macOS |
@@ -189,5 +190,5 @@ bin/dotfiles    the dotfiles command (symlinked onto PATH by the cli role)
 bootstrap.sh    install prerequisites on a fresh host
 site.yml        the playbook — common baseline, then per-host additional_roles
 inventory/      hosts.yml, group_vars/ (common + per-family), host_vars/
-roles/          common, zsh, cli, git, neovim, herdr, libreoffice, bitwarden, k8s-tools, upstream-tools, docker, tailscale
+roles/          common, zsh, cli, git, ai-skills, neovim, herdr, libreoffice, bitwarden, k8s-tools, upstream-tools, docker, tailscale
 ```

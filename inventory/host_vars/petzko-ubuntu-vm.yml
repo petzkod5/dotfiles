@@ -26,6 +26,7 @@ additional_roles:
   - zsh
   - cli
   - git
+  - ai-skills
   - neovim
   - k8s-tools
   - upstream-tools
