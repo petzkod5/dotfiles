@@ -20,12 +20,11 @@ additional_roles:
   - upstream-tools
   - docker
   - tailscale
-# petzko.omp.omp_full is intentionally blocked until external collection v0.2.0
-# is published; it must remain a qualified collection role (no local shim).
+  - petzko.omp.omp_full
 
 # Match the personal-laptop secret policy.
 bitwarden_ssh_keys:
-  - item: "petzkod Github"
+  - item: "b5da5a47-9423-4d97-b3cc-b469003cabdd" # petzkod Github
     dest: "{{ bitwarden_ssh_dir }}/id_ed25519"
 bitwarden_notes:
   - item: "sops-age-pgp-key"
