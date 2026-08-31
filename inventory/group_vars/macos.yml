@@ -1,8 +1,8 @@
 ---
 # Darwin hosts use Homebrew formulae and casks rather than Linux package tools.
 common_manage_flatpak: false
-# macOS `systemsetup` exposes UTC as GMT.
-common_timezone: "GMT"
+# Use the regional identifier so macOS applies EST/EDT daylight-saving rules.
+common_timezone: "America/New_York"
 common_manage_etc_hosts: false
 common_manage_locale: false
 common_user_shell: /bin/zsh
