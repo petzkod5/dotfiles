@@ -4,29 +4,33 @@
 # runs as the user (become: false, via the additional_roles play). Local
 # connection assumed — the symlinked shell fragment targets this repo.
 
-- name: Ensure Neovim is installed
+- name: Ensure Neovim is installed on non-Darwin systems
   ansible.builtin.package:
     name: "{{ nvim_package }}"
     state: present
   become: true
+  when: ansible_facts['system'] != 'Darwin'
   tags:
     - nvim_install
 
-- name: Identify the target user
-  ansible.builtin.command:
-    cmd: id -un
-  register: _nvim_user
+- name: Ensure Neovim is installed on Darwin
+  community.general.homebrew:
+    name: "{{ nvim_package }}"
+    state: present
+  become: false
+  when: ansible_facts['system'] == 'Darwin'
+  tags:
+    - nvim_install
+
+- name: Read the target user's home directory
+  ansible.builtin.command: printenv HOME
+  register: _nvim_home
   changed_when: false
   check_mode: false
 
-- name: Look up the target user's home directory
-  ansible.builtin.getent:
-    database: passwd
-    key: "{{ _nvim_user.stdout }}"
-
 - name: Resolve the home directory
   ansible.builtin.set_fact:
-    nvim_home: "{{ ansible_facts.getent_passwd[_nvim_user.stdout][4] }}"
+    nvim_home: "{{ _nvim_home.stdout }}"
 
 - name: Check for an existing Neovim config
   ansible.builtin.stat:

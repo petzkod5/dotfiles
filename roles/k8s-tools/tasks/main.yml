@@ -1,8 +1,7 @@
 ---
-# Install common Kubernetes CLI tooling from upstream release artifacts.
-# Designed for the additional_roles play (become: false at the play level); the
-# tasks that write under k8s_tools_lib_dir / k8s_tools_bin_dir escalate on their
-# own, mirroring the neovim role.
+# Install common Kubernetes CLI tooling from upstream release artifacts on Linux
+# and current Homebrew formulae on Darwin. Linux system paths escalate; Darwin
+# Homebrew remains owned by the login user.
 
 - name: Map the CPU architecture to upstream release naming
   ansible.builtin.set_fact:
@@ -14,10 +13,12 @@
       armv7l: arm
   tags:
     - always
+  when: ansible_facts['system'] == 'Linux'
 
 - name: Resolve the selected tools from the catalog
   ansible.builtin.set_fact:
     _k8s_tools_selected: "{{ k8s_tools_catalog | selectattr('name', 'in', k8s_tools_enabled) | list }}"
+  when: ansible_facts['system'] == 'Linux'
 
 - name: Fail when an enabled tool is missing from the catalog
   ansible.builtin.assert:
@@ -28,6 +29,7 @@
       k8s_tools_enabled lists tools absent from k8s_tools_catalog:
       {{ k8s_tools_enabled | unique | difference(k8s_tools_catalog | map(attribute='name') | list) | join(', ') }}
     quiet: true
+  when: ansible_facts['system'] == 'Linux'
 
 - name: Ensure the install directories exist
   become: true
@@ -38,6 +40,7 @@
   loop:
     - "{{ k8s_tools_lib_dir }}"
     - "{{ k8s_tools_bin_dir }}"
+  when: ansible_facts['system'] == 'Linux'
 
 - name: Install each selected tool
   ansible.builtin.include_tasks: install_tool.yml
@@ -45,3 +48,28 @@
   loop_control:
     loop_var: tool
     label: "{{ tool.name }} {{ tool.version }}"
+  when: ansible_facts['system'] == 'Linux'
+- name: Resolve the selected Homebrew formulae
+  ansible.builtin.set_fact:
+    _k8s_tools_homebrew_selected: >-
+      {{ k8s_tools_homebrew_catalog | dict2items
+          | selectattr('key', 'in', k8s_tools_enabled)
+          | map(attribute='value') | list }}
+  when: ansible_facts['system'] == 'Darwin'
+
+- name: Fail when an enabled tool is missing from the Homebrew catalog
+  ansible.builtin.assert:
+    that:
+      - _k8s_tools_homebrew_selected | length == k8s_tools_enabled | unique | length
+    fail_msg: >-
+      k8s_tools_enabled lists tools absent from k8s_tools_homebrew_catalog:
+      {{ k8s_tools_enabled | unique | difference(k8s_tools_homebrew_catalog.keys() | list) | join(', ') }}
+    quiet: true
+  when: ansible_facts['system'] == 'Darwin'
+
+- name: Install selected Homebrew formulae
+  community.general.homebrew:
+    name: "{{ _k8s_tools_homebrew_selected }}"
+    state: present
+  become: false
+  when: ansible_facts['system'] == 'Darwin'

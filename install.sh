@@ -34,10 +34,23 @@ else
   die "run as root or install sudo first."
 fi
 
-# Ensure git (needed for the clone). bootstrap.sh installs python/ansible after.
+# Ensure git (needed for the clone). bootstrap.sh installs Python/Ansible after.
 if ! command -v git >/dev/null 2>&1; then
   log "Installing git"
-  if command -v pacman >/dev/null 2>&1; then
+  if [ "$(uname -s)" = "Darwin" ]; then
+    if ! command -v brew >/dev/null 2>&1; then
+      [ "$(id -u)" -ne 0 ] || die "Homebrew must be installed by the non-root login user."
+      /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    fi
+    if [ -x /opt/homebrew/bin/brew ]; then
+      eval "$(/opt/homebrew/bin/brew shellenv)"
+    elif [ -x /usr/local/bin/brew ]; then
+      eval "$(/usr/local/bin/brew shellenv)"
+    else
+      die "Homebrew installation did not provide brew."
+    fi
+    brew install git
+  elif command -v pacman >/dev/null 2>&1; then
     $SUDO pacman -Sy --needed --noconfirm git
   elif command -v apt-get >/dev/null 2>&1; then
     $SUDO apt-get update
@@ -45,7 +58,7 @@ if ! command -v git >/dev/null 2>&1; then
   elif command -v dnf >/dev/null 2>&1; then
     $SUDO dnf install -y git
   else
-    die "no supported package manager (pacman/apt/dnf); install git manually."
+    die "no supported package manager (Homebrew/pacman/apt/dnf); install git manually."
   fi
 fi
 

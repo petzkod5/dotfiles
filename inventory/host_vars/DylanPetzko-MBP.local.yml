@@ -1,0 +1,33 @@
+---
+# Redhorse Corporation Apple-silicon work laptop.
+common_manage_hostname: true
+common_hostname: "DylanPetzko-MBP.local"
+
+# Bitwarden desktop app in addition to the bitwarden-cli Homebrew formula.
+common_homebrew_casks_host:
+  - bitwarden
+
+# Every local opt-in role, ordered by dependency.
+additional_roles:
+  - bitwarden
+  - zsh
+  - cli
+  - git
+  - neovim
+  - herdr
+  - libreoffice
+  - k8s-tools
+  - upstream-tools
+  - docker
+  - tailscale
+# petzko.omp.omp_full is intentionally blocked until external collection v0.2.0
+# is published; it must remain a qualified collection role (no local shim).
+
+# Match the personal-laptop secret policy.
+bitwarden_ssh_keys:
+  - item: "petzkod Github"
+    dest: "{{ bitwarden_ssh_dir }}/id_ed25519"
+bitwarden_notes:
+  - item: "sops-age-pgp-key"
+    dest: "{{ bitwarden_home }}/.config/sops/age/keys.txt"
+    mode: "0600"

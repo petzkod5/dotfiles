@@ -1,0 +1,6 @@
+---
+# Role-internal OS abstraction for Darwin hosts managed with Homebrew.
+__common_os_packages:
+  - go
+  - fd
+  - gh

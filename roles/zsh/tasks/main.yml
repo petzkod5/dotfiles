@@ -4,21 +4,15 @@
 # only inside the user's home. Assumes a local connection so the symlink target
 # (this repository) exists on the machine.
 
-- name: Identify the target user
-  ansible.builtin.command:
-    cmd: id -un
-  register: _zsh_user
+- name: Read the target user's home directory
+  ansible.builtin.command: printenv HOME
+  register: _zsh_home
   changed_when: false
   check_mode: false
 
-- name: Look up the target user's home directory
-  ansible.builtin.getent:
-    database: passwd
-    key: "{{ _zsh_user.stdout }}"
-
 - name: Resolve the home directory
   ansible.builtin.set_fact:
-    zsh_home: "{{ ansible_facts.getent_passwd[_zsh_user.stdout][4] }}"
+    zsh_home: "{{ _zsh_home.stdout }}"
 
 - name: Clone oh-my-zsh
   ansible.builtin.git:
@@ -62,3 +56,11 @@
     dest: "{{ zsh_home }}/.config/zsh/rc.d/fnm.zsh"
     state: link
     force: true
+
+- name: Symlink the Homebrew shell fragment into rc.d
+  ansible.builtin.file:
+    src: "{{ role_path }}/files/homebrew.zsh"
+    dest: "{{ zsh_home }}/.config/zsh/rc.d/homebrew.zsh"
+    state: link
+    force: true
+  when: ansible_facts['system'] == 'Darwin'

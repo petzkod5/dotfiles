@@ -3,21 +3,15 @@
 # The role is reached from additional_roles (become:false), so this stays
 # per-user and does not write system paths.
 
-- name: Identify the target user
-  ansible.builtin.command:
-    cmd: id -un
-  register: _herdr_user
+- name: Read the target user's home directory
+  ansible.builtin.command: printenv HOME
+  register: _herdr_home
   changed_when: false
   check_mode: false
 
-- name: Look up the target user's home directory
-  ansible.builtin.getent:
-    database: passwd
-    key: "{{ _herdr_user.stdout }}"
-
 - name: Resolve the target user's home directory
   ansible.builtin.set_fact:
-    herdr_home: "{{ ansible_facts.getent_passwd[_herdr_user.stdout][4] }}"
+    herdr_home: "{{ _herdr_home.stdout }}"
 
 - name: Ensure Herdr install directory exists
   ansible.builtin.file:

@@ -1,12 +1,9 @@
 ---
 # =============================================================================
-# upstream-tools role — install dev CLI tools straight from upstream release
-# artifacts, for hosts whose package manager doesn't carry them (e.g. Debian/
-# Ubuntu, where lazygit, gitleaks, fnm and uv aren't in apt). Same download +
-# versioned-dir + symlink approach as the k8s-tools role.
-# -----------------------------------------------------------------------------
-# x86_64/amd64 only — the catalog URLs below are amd64 assets. Add per-arch
-# handling to the catalog if you ever target arm64.
+# upstream-tools role — install development CLI tools from upstream release
+# artifacts on Linux hosts whose package manager lacks them. Darwin installs the
+# same selected tools through Homebrew. The Linux catalog is x86_64-only; add
+# per-architecture handling there before targeting Linux arm64.
 # =============================================================================
 
 # --- Install locations (system-wide; bin dir must be on $PATH) --------------
@@ -25,6 +22,13 @@ upstream_tools_enabled:
   - gitleaks
   - fnm
   - uv
+
+# Darwin uses current Homebrew formulae instead of Linux x86_64 archives.
+upstream_tools_homebrew_catalog:
+  lazygit: lazygit
+  gitleaks: gitleaks
+  fnm: fnm
+  uv: uv
 
 # --- Catalog: download recipes ----------------------------------------------
 # Each entry: name, version, url (a .tar.gz or .zip — both extracted with

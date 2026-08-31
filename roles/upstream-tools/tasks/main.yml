@@ -1,12 +1,12 @@
 ---
-# Install catalog-driven CLI tools from upstream release artifacts, versioned
-# under upstream_tools_lib_dir and symlinked onto PATH. Mirrors the k8s-tools
-# role; intended for the additional_roles play (become: false at play level —
-# the tasks that write system-wide escalate on their own).
+# Install catalog-driven CLI tools from upstream archives on Linux and Homebrew
+# formulae on Darwin. Linux tasks write system-wide paths; Darwin remains
+# user-owned.
 
 - name: Resolve the selected tools from the catalog
   ansible.builtin.set_fact:
     _upstream_tools_selected: "{{ upstream_tools_catalog | selectattr('name', 'in', upstream_tools_enabled) | list }}"
+  when: ansible_facts['system'] == 'Linux'
 
 - name: Fail when an enabled tool is missing from the catalog
   ansible.builtin.assert:
@@ -17,6 +17,7 @@
       upstream_tools_enabled lists tools absent from the catalog:
       {{ upstream_tools_enabled | unique | difference(upstream_tools_catalog | map(attribute='name') | list) | join(', ') }}
     quiet: true
+  when: ansible_facts['system'] == 'Linux'
 
 - name: Ensure the install directories exist
   become: true
@@ -27,6 +28,7 @@
   loop:
     - "{{ upstream_tools_lib_dir }}"
     - "{{ upstream_tools_bin_dir }}"
+  when: ansible_facts['system'] == 'Linux'
 
 - name: Install each selected tool
   ansible.builtin.include_tasks: install_tool.yml
@@ -34,3 +36,29 @@
   loop_control:
     loop_var: tool
     label: "{{ tool.name }} {{ tool.version }}"
+  when: ansible_facts['system'] == 'Linux'
+
+- name: Resolve the selected Homebrew formulae
+  ansible.builtin.set_fact:
+    _upstream_tools_homebrew_selected: >-
+      {{ upstream_tools_homebrew_catalog | dict2items
+          | selectattr('key', 'in', upstream_tools_enabled)
+          | map(attribute='value') | list }}
+  when: ansible_facts['system'] == 'Darwin'
+
+- name: Fail when an enabled tool is missing from the Homebrew catalog
+  ansible.builtin.assert:
+    that:
+      - _upstream_tools_homebrew_selected | length == upstream_tools_enabled | unique | length
+    fail_msg: >-
+      upstream_tools_enabled lists tools absent from upstream_tools_homebrew_catalog:
+      {{ upstream_tools_enabled | unique | difference(upstream_tools_homebrew_catalog.keys() | list) | join(', ') }}
+    quiet: true
+  when: ansible_facts['system'] == 'Darwin'
+
+- name: Install selected Homebrew formulae
+  community.general.homebrew:
+    name: "{{ _upstream_tools_homebrew_selected }}"
+    state: present
+  become: false
+  when: ansible_facts['system'] == 'Darwin'

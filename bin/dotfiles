@@ -7,7 +7,14 @@
 set -euo pipefail
 
 # --- locate the repo --------------------------------------------------------
-self="$(readlink -f "${BASH_SOURCE[0]}")"
+source="${BASH_SOURCE[0]}"
+while [ -h "$source" ]; do
+  source_dir="$(cd -P "$(dirname "$source")" >/dev/null 2>&1 && pwd)"
+  source="$(readlink "$source")"
+  [[ "$source" != /* ]] && source="${source_dir}/${source}"
+done
+source_dir="$(cd -P "$(dirname "$source")" >/dev/null 2>&1 && pwd)"
+self="${source_dir}/$(basename "$source")"
 DOTFILES_DIR="${DOTFILES_DIR:-$(dirname "$(dirname "$self")")}"
 HOST="${DOTFILES_HOST:-$(hostname)}"
 
@@ -26,19 +33,21 @@ command -v ansible-playbook >/dev/null 2>&1 \
   || die "ansible-playbook not found — run ${DOTFILES_DIR}/bootstrap.sh first."
 [ -f "${DOTFILES_DIR}/site.yml" ] \
   || die "site.yml not found in ${DOTFILES_DIR} (set DOTFILES_DIR to the repo)."
-
 # --- configuration ----------------------------------------------------------
 # Optional TOML config at ~/.config/dotfiles/config.toml (override path with
 # DOTFILES_CONFIG). Precedence: environment variable > config file > default.
 # Parsed with Python's stdlib tomllib (needs Python >= 3.11); `dotfiles config`
 # scaffolds and opens it.
 DOTFILES_CONFIG="${DOTFILES_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/config.toml}"
-declare -A _cfg=()
+declare -a _cfg_keys=()
+declare -a _cfg_values=()
 if [ -f "$DOTFILES_CONFIG" ]; then
   _cfgpy="$(command -v python3 || command -v python || true)"
   if [ -n "$_cfgpy" ]; then
-    while IFS= read -r -d '' _k && IFS= read -r -d '' _v; do _cfg["$_k"]="$_v"; done \
-      < <("$_cfgpy" - "$DOTFILES_CONFIG" <<'PY'
+    while IFS= read -r -d '' _k && IFS= read -r -d '' _v; do
+      _cfg_keys+=("$_k")
+      _cfg_values+=("$_v")
+    done < <("$_cfgpy" - "$DOTFILES_CONFIG" <<'PY'
 import sys
 try:
     import tomllib
@@ -61,7 +70,15 @@ PY
     )
   fi
 fi
-cfg()  { printf '%s' "${_cfg[$1]:-}"; }
+cfg() {
+  local key="$1" i
+  for ((i = 0; i < ${#_cfg_keys[@]}; i++)); do
+    if [[ "${_cfg_keys[$i]}" == "$key" ]]; then
+      printf '%s' "${_cfg_values[$i]}"
+      return
+    fi
+  done
+}
 pick() { local e="$1" c; c="$(cfg "$2")"; printf '%s' "${e:-${c:-$3}}"; }
 
 _default_prompt="Commit the changes in this dotfiles repository. Ensure you check for secrets before committing. You must run gitleaks before committing. The commit message should follow conventionalcommits standards and be a general synopsis of the changes."
@@ -81,7 +98,14 @@ case "$DOTFILES_BECOME" in none|no|0) become=() ;; esac
 
 play() {  # play <playbook> [extra ansible-playbook args...]
   local pb="$1"; shift
-  ( cd "$DOTFILES_DIR" && ansible-playbook "$pb" --limit "$HOST" "${become[@]}" "$@" )
+  (
+    cd "$DOTFILES_DIR"
+    if [ "${#become[@]}" -gt 0 ]; then
+      ansible-playbook "$pb" --limit "$HOST" "${become[@]}" "$@"
+    else
+      ansible-playbook "$pb" --limit "$HOST" "$@"
+    fi
+  )
 }
 
 add_host() {  # add-host [HOSTNAME] — register a new machine so it can be configured
@@ -94,18 +118,22 @@ add_host() {  # add-host [HOSTNAME] — register a new machine so it can be conf
   # Map the running OS (or $DOTFILES_FAMILY) to an inventory family group.
   local family="${DOTFILES_FAMILY:-}"
   if [ -z "$family" ]; then
-    # shellcheck disable=SC1091
-    . /etc/os-release 2>/dev/null || true
-    case " ${ID:-} ${ID_LIKE:-} " in
-      *arch*)                   family=archlinux ;;
-      *debian*|*ubuntu*)        family=debian ;;
-      *rhel*|*fedora*|*centos*) family=redhat ;;
-      *) die "Cannot detect OS family — set DOTFILES_FAMILY=archlinux|debian|redhat." ;;
-    esac
+    if [ "$(uname -s)" = "Darwin" ]; then
+      family=macos
+    else
+      # shellcheck disable=SC1091
+      . /etc/os-release 2>/dev/null || true
+      case " ${ID:-} ${ID_LIKE:-} " in
+        *arch*)                   family=archlinux ;;
+        *debian*|*ubuntu*)        family=debian ;;
+        *rhel*|*fedora*|*centos*) family=redhat ;;
+        *) die "Cannot detect OS family — set DOTFILES_FAMILY=archlinux|debian|redhat|macos." ;;
+      esac
+    fi
   fi
   case "$family" in
-    archlinux|debian|redhat) ;;
-    *) die "Unknown family '${family}' (want archlinux, debian or redhat)." ;;
+    archlinux|debian|redhat|macos) ;;
+    *) die "Unknown family '${family}' (want archlinux, debian, redhat, or macos)." ;;
   esac
 
   local inv="${DOTFILES_DIR}/inventory/hosts.yml"
@@ -447,7 +475,7 @@ Extra args pass through to ansible-playbook, e.g.:
 
 Env: DOTFILES_DIR (repo, auto-detected) · DOTFILES_HOST (default: \$(hostname))
      DOTFILES_BECOME=none to skip the sudo-password prompt (NOPASSWD/headless)
-     DOTFILES_FAMILY=archlinux|debian|redhat to override add-host detection
+     DOTFILES_FAMILY=archlinux|debian|redhat|macos to override add-host detection
      OPENROUTER_API_KEY enables an LLM commit message for 'commit';
        OPENROUTER_MODEL (default openai/gpt-4o-mini) + DOTFILES_COMMIT_PROMPT tune it
      Any of the above can live in ~/.config/dotfiles/config.toml — 'dotfiles config'

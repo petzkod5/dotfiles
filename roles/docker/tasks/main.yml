@@ -1,8 +1,7 @@
 ---
-# Install Docker Engine + Compose and enable the daemon. Package install and
-# service management run as root; the login user is resolved with become:false
-# (the additional_roles play runs become:false) so the docker group is added to
-# the real user, not root.
+# Install Docker Engine + Compose on Linux, or Docker Desktop on Darwin. Linux
+# package and service management run as root; Docker Desktop owns its macOS
+# lifecycle and does not create a docker group.
 
 - name: Identify the login user
   ansible.builtin.command:
@@ -61,12 +60,20 @@
   become: true
   when: ansible_facts['os_family'] == 'Archlinux'
 
+- name: Install Docker Desktop (Darwin)
+  community.general.homebrew_cask:
+    name: "{{ docker_cask_macos }}"
+    state: present
+  become: false
+  when: ansible_facts['system'] == 'Darwin'
+
 - name: Enable and start the Docker service
   ansible.builtin.systemd:
     name: "{{ docker_service }}"
     enabled: true
     state: started
   become: true
+  when: ansible_facts['system'] == 'Linux'
 
 - name: Add the login user to the docker group
   ansible.builtin.user:
@@ -74,4 +81,6 @@
     groups: docker
     append: true
   become: true
-  when: docker_manage_group | bool
+  when:
+    - docker_manage_group | bool
+    - ansible_facts['system'] == 'Linux'

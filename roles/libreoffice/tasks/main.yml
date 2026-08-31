@@ -1,7 +1,7 @@
 ---
-# Install LibreOffice from distro packages. This role is normally reached from
-# additional_roles, whose play runs become:false, so each package task escalates
-# explicitly.
+# Install LibreOffice from distro packages on Linux or a Homebrew cask on
+# Darwin. The role is normally reached from additional_roles, whose play runs
+# become:false, so Linux package tasks escalate explicitly.
 
 - name: Install LibreOffice (Debian)
   ansible.builtin.apt:
@@ -25,3 +25,10 @@
     state: present
   become: true
   when: ansible_facts['os_family'] == 'RedHat'
+
+- name: Install LibreOffice (Darwin)
+  community.general.homebrew_cask:
+    name: "{{ libreoffice_cask_macos }}"
+    state: present
+  become: false
+  when: ansible_facts['system'] == 'Darwin'

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
-# bootstrap.sh — prepare a fresh Linux host to be configured by this repo.
+# bootstrap.sh — prepare a fresh Linux or macOS host to be configured by this repo.
 #
-# Installs git, python3 and ansible using the host's native package manager,
+# Installs git, Python, and Ansible using the host's native package manager,
 # then pulls the Ansible collections declared in requirements.yml.
 #
 # Usage: ./bootstrap.sh
@@ -17,8 +17,30 @@ else
   SUDO="sudo"
 fi
 
+bootstrap_homebrew() {
+  if ! command -v brew >/dev/null 2>&1; then
+    if [ "$(id -u)" -eq 0 ]; then
+      err "Homebrew must be installed by the non-root login user."
+      exit 1
+    fi
+    log "Installing Homebrew"
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+  fi
+
+  if [ -x /opt/homebrew/bin/brew ]; then
+    eval "$(/opt/homebrew/bin/brew shellenv)"
+  elif [ -x /usr/local/bin/brew ]; then
+    eval "$(/usr/local/bin/brew shellenv)"
+  else
+    err "Homebrew installation did not provide brew."
+    exit 1
+  fi
+}
+
 detect_pm() {
-  if command -v pacman >/dev/null 2>&1; then
+  if [ "$(uname -s)" = "Darwin" ]; then
+    echo homebrew
+  elif command -v pacman >/dev/null 2>&1; then
     echo pacman
   elif command -v apt-get >/dev/null 2>&1; then
     echo apt
@@ -31,6 +53,10 @@ detect_pm() {
 
 install_prereqs() {
   case "$1" in
+    homebrew)
+      bootstrap_homebrew
+      brew install git python ansible
+      ;;
     pacman)
       $SUDO pacman -Sy --needed --noconfirm git python ansible
       ;;
@@ -42,7 +68,7 @@ install_prereqs() {
       $SUDO dnf install -y git python3 python3-pip ansible
       ;;
     *)
-      err "Unsupported package manager — install git, python3 and ansible manually."
+      err "Unsupported package manager — install git, Python, and Ansible manually."
       exit 1
       ;;
   esac

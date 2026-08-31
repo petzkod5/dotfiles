@@ -1,8 +1,8 @@
 # petzko-dotfiles
 
-Ansible-managed configuration for my Linux machines: one shared baseline for any
-Linux host, with per-distribution and per-host overrides — all driven by a small
-`dotfiles` command.
+Ansible-managed configuration for Linux and macOS machines: one shared baseline
+with per-distribution and per-host overrides — all driven by a small `dotfiles`
+command.
 
 ## Quick start (new machine)
 
@@ -19,6 +19,15 @@ exec $SHELL                # reload PATH — `dotfiles` is now available everywh
 
 The first `sync` symlinks the command to `~/.local/bin/dotfiles`, so from then on
 you just run `dotfiles sync` from any directory.
+
+### macOS prerequisites
+
+Darwin hosts use [Homebrew](https://brew.sh) for formulae and casks. On a fresh
+machine, `bootstrap.sh` installs Homebrew as the login user when needed, then
+loads `/opt/homebrew/bin/brew shellenv` on Apple Silicon or
+`/usr/local/bin/brew shellenv` on Intel before installing Git, Python, and
+Ansible. The `macos` inventory family disables Linux-only Flatpak, locale, and
+`/etc/hosts` management.
 
 ## Install remotely (one command)
 
@@ -65,8 +74,9 @@ dotfiles check                        # dry-run everything
 ```
 
 Optional environment overrides: `DOTFILES_HOST` (target host, default
-`$(hostname)`), `DOTFILES_FAMILY` (override OS detection for `add-host`),
-`DOTFILES_BECOME=none` (skip the sudo prompt on NOPASSWD / headless sudo).
+`$(hostname)`), `DOTFILES_FAMILY` (`archlinux`, `debian`, `redhat`, or `macos`
+for `add-host` detection), `DOTFILES_BECOME=none` (skip the sudo prompt on
+NOPASSWD / headless sudo).
 
 Prefer a file? `dotfiles config` scaffolds `~/.config/dotfiles/config.toml`
 (TOML), where the same settings live more comfortably — `commit.model`,
@@ -115,8 +125,7 @@ accumulate across layers:
 |----------|---------------------------------------|------------------------------------|
 | defaults | `roles/common/defaults/main.yml`      | baseline for everything            |
 | common   | `inventory/group_vars/all.yml`        | every host                         |
-| family   | `inventory/group_vars/<family>.yml`   | one OS family (arch/debian/redhat) |
-| host     | `inventory/host_vars/<hostname>.yml`  | a single machine                   |
+| family   | `inventory/group_vars/<family>.yml`   | one OS family (`archlinux`, `debian`, `redhat`, `macos`) |
 
 The most common edits:
 
@@ -136,18 +145,22 @@ The most common edits:
 | `git`            | a symlinked `~/.gitconfig`                                 |
 | `neovim`         | Neovim + AstroNvim; aliases `vim`/`vi` → nvim, `$EDITOR=nvim` |
 | `herdr`         | Herdr agent multiplexer binary + standard default config   |
-| `libreoffice`    | LibreOffice desktop office suite from distro packages      |
-| `bitwarden`      | pulls SSH keys / notes / files from your Bitwarden vault   |
-| `k8s-tools`      | Kubernetes CLI tooling from upstream releases (kubectl, helm, helmfile, k9s, kind, minikube, sops, age, talosctl) |
-| `upstream-tools` | dev CLIs from upstream releases where apt lacks them (lazygit, gitleaks, fnm, uv) |
-| `docker`         | Docker Engine + Compose; daemon enabled, user added to `docker` |
-| `tailscale`      | Tailscale + `tailscaled` (`sudo tailscale up` once to authenticate) |
+| `libreoffice`    | LibreOffice from distro packages on Linux; Homebrew cask on macOS |
+| `bitwarden`      | pulls vault material; Homebrew formula on macOS |
+| `k8s-tools`      | Kubernetes CLIs from pinned upstream releases on Linux; Homebrew formulae on macOS |
+| `upstream-tools` | dev CLIs from Linux upstream archives; Homebrew formulae on macOS |
+| `docker`         | Docker Engine + systemd on Linux; Docker Desktop cask on macOS |
+| `tailscale`      | `tailscaled` on Linux; Tailscale.app cask on macOS |
 | `petzko.omp.omp_full` | external `petzko.omp` collection role: OMP binary + copied config, RULES.md, AGENTS.md, `/commit` extension |
 
 The file-symlinking roles (`zsh`, `cli`, `git`, `neovim`) mean editing the live
 file edits the tracked repo file — customise once, then `dotfiles commit`. The
 external `petzko.omp` collection copies OMP files into `~/.omp/agent` instead of
 linking back to this repo.
+
+On macOS, Docker Desktop and Tailscale.app are installed but not launched,
+approved, or authenticated by Ansible. Launch both after sync, accept their
+first-run prompts, and authenticate Tailscale to the intended tailnet.
 
 ## Secrets (Bitwarden)
 

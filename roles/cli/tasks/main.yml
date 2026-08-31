@@ -3,21 +3,15 @@
 # Runs as the user (become: false, via the additional_roles play). Assumes a
 # local connection so the symlink target (this repo) exists on the machine.
 
-- name: Identify the target user
-  ansible.builtin.command:
-    cmd: id -un
-  register: _cli_user
+- name: Read the target user's home directory
+  ansible.builtin.command: printenv HOME
+  register: _cli_home
   changed_when: false
   check_mode: false
 
-- name: Look up the target user's home directory
-  ansible.builtin.getent:
-    database: passwd
-    key: "{{ _cli_user.stdout }}"
-
 - name: Resolve the home directory
   ansible.builtin.set_fact:
-    cli_home: "{{ ansible_facts.getent_passwd[_cli_user.stdout][4] }}"
+    cli_home: "{{ _cli_home.stdout }}"
 
 - name: Ensure the user bin directory exists
   ansible.builtin.file:

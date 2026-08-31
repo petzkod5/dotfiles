@@ -1,7 +1,7 @@
 ---
-# Install Tailscale and enable tailscaled. On Debian the keyring + apt source
-# are fetched straight from Tailscale (their .list references the keyring path),
-# matching the official install docs.
+# Install Tailscale and enable tailscaled on Linux. Darwin installs
+# Tailscale.app through Homebrew and leaves its lifecycle and authentication to
+# the user.
 
 - name: Set up the Tailscale apt repository (Debian)
   when: ansible_facts['os_family'] == 'Debian'
@@ -41,9 +41,17 @@
   become: true
   when: ansible_facts['os_family'] == 'Archlinux'
 
+- name: Install Tailscale.app (Darwin)
+  community.general.homebrew_cask:
+    name: "{{ tailscale_cask_macos }}"
+    state: present
+  become: false
+  when: ansible_facts['system'] == 'Darwin'
+
 - name: Enable and start tailscaled
   ansible.builtin.systemd:
     name: "{{ tailscale_service }}"
     enabled: true
     state: started
   become: true
+  when: ansible_facts['system'] == 'Linux'

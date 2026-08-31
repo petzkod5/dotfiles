@@ -15,4 +15,3 @@ herdr_binary_path: "{{ herdr_install_dir }}/herdr"
 # User config path documented by Herdr for Linux/macOS.
 herdr_config_dir: "{{ herdr_home }}/.config/herdr"
 herdr_config_file: "{{ herdr_config_dir }}/config.toml"
-

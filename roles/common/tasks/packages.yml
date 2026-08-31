@@ -14,6 +14,28 @@
           + common_packages_family
           + common_packages_host) | unique }}
 
+- name: Resolve the full Homebrew cask set
+  ansible.builtin.set_fact:
+    _common_homebrew_casks_resolved: >-
+      {{ (common_homebrew_casks
+          + common_homebrew_casks_all
+          + common_homebrew_casks_family
+          + common_homebrew_casks_host) | unique }}
+
+- name: Install Homebrew formulae (Darwin)
+  community.general.homebrew:
+    name: "{{ _common_packages_resolved }}"
+    state: present
+  become: false
+  when: ansible_facts['system'] == 'Darwin'
+
+- name: Install Homebrew casks (Darwin)
+  community.general.homebrew_cask:
+    name: "{{ _common_homebrew_casks_resolved }}"
+    state: present
+  become: false
+  when: ansible_facts['system'] == 'Darwin'
+
 - name: Install packages (Archlinux)
   community.general.pacman:
     name: "{{ _common_packages_resolved }}"

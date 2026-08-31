@@ -2,12 +2,11 @@
 # =============================================================================
 # k8s-tools role — default variables.
 # -----------------------------------------------------------------------------
-# Installs common Kubernetes CLI tooling straight from upstream release
-# artifacts (GitHub / vendor mirrors), so the same recipe works on every
-# distribution regardless of repo/AUR coverage. Each tool is unpacked into a
-# versioned directory under k8s_tools_lib_dir and symlinked onto PATH from
-# k8s_tools_bin_dir. Bumping a *_version re-downloads into a fresh directory and
-# re-points the symlink; an unchanged version is a no-op.
+# Installs Kubernetes CLI tooling from pinned upstream release artifacts on
+# Linux. Darwin uses current Homebrew formulae. Linux artifacts live in versioned
+# directories under k8s_tools_lib_dir and are symlinked from k8s_tools_bin_dir.
+# Bumping a Linux *_version re-downloads into a fresh directory and re-points the
+# symlink; an unchanged version is a no-op.
 #
 # Customise per host:
 #   - pin/upgrade a tool      -> set its k8s_tools_<tool>_version
@@ -41,6 +40,18 @@ k8s_tools_enabled:
   - sops
   - age
   - talosctl
+
+# Darwin uses current Homebrew formulae instead of Linux release artifacts.
+k8s_tools_homebrew_catalog:
+  kubectl: kubernetes-cli
+  helm: helm
+  helmfile: helmfile
+  k9s: k9s
+  kind: kind
+  minikube: minikube
+  sops: sops
+  age: age
+  talosctl: talosctl
 
 # --- Tool catalog: download recipes (not meant to be overridden per host) ----
 # Each entry:

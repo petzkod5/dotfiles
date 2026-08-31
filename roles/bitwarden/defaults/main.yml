@@ -7,6 +7,7 @@
 # Package providing the `bw` CLI (Arch official repo; on Debian/Fedora install
 # the npm package @bitwarden/cli instead).
 bitwarden_cli_package: "bitwarden-cli"
+bitwarden_cli_package_macos: "bitwarden-cli"
 
 # Debian/RedHat have no bw package — install Node.js (these) then the npm CLI.
 bitwarden_node_packages:

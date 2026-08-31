@@ -18,7 +18,9 @@
     name: "{{ bitwarden_node_packages }}"
     state: present
   become: true
-  when: ansible_facts['os_family'] != 'Archlinux'
+  when:
+    - ansible_facts['system'] == 'Linux'
+    - ansible_facts['os_family'] != 'Archlinux'
 
 - name: Install the Bitwarden CLI via npm (Debian/RedHat)
   community.general.npm:
@@ -26,7 +28,16 @@
     global: true
     state: present
   become: true
-  when: ansible_facts['os_family'] != 'Archlinux'
+  when:
+    - ansible_facts['system'] == 'Linux'
+    - ansible_facts['os_family'] != 'Archlinux'
+
+- name: Install the Bitwarden CLI on Darwin
+  community.general.homebrew:
+    name: "{{ bitwarden_cli_package_macos }}"
+    state: present
+  become: false
+  when: ansible_facts['system'] == 'Darwin'
 
 - name: Read Bitwarden auth status
   ansible.builtin.command:
@@ -69,8 +80,12 @@
 
 - name: Resolve API credentials from prompts (or pre-supplied vars)
   ansible.builtin.set_fact:
-    bitwarden_client_id: "{{ _bw_cid.user_input | default(bitwarden_client_id | default('')) }}"
-    bitwarden_client_secret: "{{ _bw_csec.user_input | default(bitwarden_client_secret | default('')) }}"
+    bitwarden_client_id: >-
+      {{ (_bw_cid.user_input | default(bitwarden_client_id | default('')))
+          | regex_replace('\u001b\\[20[01]~', '') }}
+    bitwarden_client_secret: >-
+      {{ (_bw_csec.user_input | default(bitwarden_client_secret | default('')))
+          | regex_replace('\u001b\\[20[01]~', '') }}
   when: _bw_need_login | bool
   no_log: true
 
@@ -106,7 +121,9 @@
 
 - name: Resolve master password from prompt (or pre-supplied var)
   ansible.builtin.set_fact:
-    bitwarden_master_password: "{{ _bw_mpw.user_input | default(bitwarden_master_password | default('')) }}"
+    bitwarden_master_password: >-
+      {{ (_bw_mpw.user_input | default(bitwarden_master_password | default('')))
+          | regex_replace('\u001b\\[20[01]~', '') }}
   no_log: true
 
 - name: Validate the master password is available
@@ -139,22 +156,16 @@
   no_log: true
 
 # Resolve the home directory of the user we actually run as (become: false).
-# ansible_env.HOME can be root's when facts were gathered under become, so query
-# passwd directly for the real user instead.
-- name: Identify the target user
-  ansible.builtin.command:
-    cmd: id -un
-  register: _bw_user
+# ansible_env.HOME can be root's when facts were gathered under become, so read
+# the non-privileged process environment directly.
+- name: Read the target user's home directory
+  ansible.builtin.command: printenv HOME
+  register: _bw_home
   changed_when: false
-
-- name: Look up the target user's home directory
-  ansible.builtin.getent:
-    database: passwd
-    key: "{{ _bw_user.stdout }}"
 
 - name: Resolve the home directory fact
   ansible.builtin.set_fact:
-    bitwarden_home: "{{ ansible_facts.getent_passwd[_bw_user.stdout][4] }}"
+    bitwarden_home: "{{ _bw_home.stdout }}"
 
 # ---- SSH keys --------------------------------------------------------------
 - name: Ensure the SSH directory exists

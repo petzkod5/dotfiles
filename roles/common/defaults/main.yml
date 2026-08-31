@@ -52,6 +52,12 @@ common_packages_all: []      # set in group_vars/all
 common_packages_family: []   # set in group_vars/<family>
 common_packages_host: []     # set in host_vars/<host>
 
+# Homebrew casks follow the same additive precedence as formula packages.
+common_homebrew_casks: []
+common_homebrew_casks_all: []
+common_homebrew_casks_family: []
+common_homebrew_casks_host: []
+
 # --- Flatpak ----------------------------------------------------------------
 # Cross-distro GUI apps are delivered via Flatpak so a single app reference
 # works on every family (e.g. Discord, absent from default Debian/Fedora repos).
