@@ -1,0 +1,26 @@
+---
+# =============================================================================
+# orca role — install Orca's official desktop app package.
+# =============================================================================
+
+# Official Homebrew tap and cask for macOS/Darwin.
+orca_homebrew_tap_macos: stablyai/orca
+orca_cask_macos: orca
+
+# Linux installs use Orca's official AppImage release assets. Keep the binary
+# versioned on disk, then expose a stable ~/.local/bin/orca launcher symlink.
+orca_version: "1.4.193"
+orca_linux_release_url: "https://github.com/stablyai/orca/releases/download/v{{ orca_version }}"
+orca_linux_appimage_arch_map:
+  x86_64:
+    url: "{{ orca_linux_release_url }}/orca-linux.AppImage"
+    checksum: "sha256:3f816ff22f9c33f9c4a1e512cc88285c012eebf6caaae8cebebddfb79e900855"
+  aarch64:
+    url: "{{ orca_linux_release_url }}/orca-linux-arm64.AppImage"
+    checksum: "sha256:ff2c3b7b651c4c7d88df0dfc88d2d520cba8e0e814b223066b6f78b45bde8e4b"
+
+orca_linux_bin_dir: "{{ ansible_user_dir | default(ansible_env.HOME) }}/.local/bin"
+orca_linux_applications_dir: "{{ ansible_user_dir | default(ansible_env.HOME) }}/.local/share/applications"
+orca_linux_appimage_path: "{{ orca_linux_bin_dir }}/orca-{{ orca_version }}-{{ ansible_facts['architecture'] }}.AppImage"
+orca_linux_launcher_path: "{{ orca_linux_bin_dir }}/orca"
+orca_linux_desktop_entry_path: "{{ orca_linux_applications_dir }}/orca.desktop"

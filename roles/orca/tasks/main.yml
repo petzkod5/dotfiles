@@ -1,0 +1,66 @@
+---
+# Install Orca from the official Homebrew cask on Darwin or the official
+# version-pinned AppImage on Linux. The role is user-owned and never escalates.
+
+- name: Tap the official Orca Homebrew repository on Darwin
+  community.general.homebrew_tap:
+    name: "{{ orca_homebrew_tap_macos }}"
+    state: present
+  become: false
+  when: ansible_facts['system'] == 'Darwin'
+
+- name: Install Orca Homebrew cask on Darwin
+  community.general.homebrew_cask:
+    name: "{{ orca_cask_macos }}"
+    state: present
+  become: false
+  when: ansible_facts['system'] == 'Darwin'
+
+- name: Install Orca AppImage on Linux
+  become: false
+  when: ansible_facts['system'] == 'Linux'
+  block:
+    - name: Assert Orca publishes an AppImage for this Linux architecture
+      ansible.builtin.assert:
+        that:
+          - ansible_facts['architecture'] in (orca_linux_appimage_arch_map.keys() | list)
+        fail_msg: >-
+          Orca Linux AppImages are supported only for x86_64 and aarch64;
+          this host reports {{ ansible_facts['architecture'] }}.
+        quiet: true
+
+    - name: Ensure Orca user install directories exist on Linux
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - "{{ orca_linux_bin_dir }}"
+        - "{{ orca_linux_applications_dir }}"
+
+    - name: Download Orca Linux AppImage
+      ansible.builtin.get_url:
+        url: "{{ orca_linux_appimage_arch_map[ansible_facts['architecture']]['url'] }}"
+        dest: "{{ orca_linux_appimage_path }}"
+        checksum: "{{ orca_linux_appimage_arch_map[ansible_facts['architecture']]['checksum'] }}"
+        mode: "0755"
+
+    - name: Link stable Orca launcher on Linux
+      ansible.builtin.file:
+        src: "{{ orca_linux_appimage_path }}"
+        dest: "{{ orca_linux_launcher_path }}"
+        state: link
+        force: true
+
+    - name: Install Orca desktop entry on Linux
+      ansible.builtin.copy:
+        dest: "{{ orca_linux_desktop_entry_path }}"
+        mode: "0644"
+        content: |
+          [Desktop Entry]
+          Type=Application
+          Name=Orca
+          Comment=Orca desktop app
+          Exec={{ orca_linux_launcher_path }}
+          Terminal=false
+          Categories=Utility;
