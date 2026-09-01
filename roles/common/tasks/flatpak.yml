@@ -8,6 +8,7 @@
   ansible.builtin.package:
     name: flatpak
     state: present
+  become: true
 
 - name: Enable Flatpak remotes
   community.general.flatpak_remote:
@@ -16,6 +17,7 @@
     method: system
     state: present
   loop: "{{ common_flatpak_remotes + common_flatpak_remotes_host }}"
+  become: true
   loop_control:
     label: "{{ item.name }}"
 
@@ -28,6 +30,7 @@
   loop: "{{ _common_flatpaks }}"
   loop_control:
     label: "{{ item.name }}"
+  become: true
   vars:
     _common_flatpaks: "{{ common_flatpak_packages
                           + common_flatpak_packages_all

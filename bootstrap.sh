@@ -86,8 +86,8 @@ main() {
   fi
 
   log "Done. Next:"
-  log "  ansible-playbook site.yml --ask-become-pass   # first run installs the 'dotfiles' command"
-  log "  exec \$SHELL                                   # reload PATH, then use: dotfiles sync"
+  log "  ./bin/dotfiles sync                    # prompts only when a credential is unavailable"
+  log "  exec \$SHELL                            # reload PATH, then use: dotfiles sync"
 }
 
 main "$@"

@@ -38,9 +38,11 @@ curl -fsSL https://raw.githubusercontent.com/petzkod5/dotfiles/main/install.sh |
 ```
 
 It ensures `git`, clones the repo to `~/petzko-dotfiles`, runs `bootstrap.sh`
-(git/python/ansible + Galaxy collections), then `dotfiles sync` — prompting for
-your sudo password (and the Bitwarden master password if that role is enabled).
-Run `exec $SHELL` afterward to put the `dotfiles` command on your PATH.
+(git/python/ansible + Galaxy collections), then `dotfiles sync`. Package setup
+uses sudo normally. The playbook asks for a sudo password only when neither an
+active sudo ticket nor a saved credential exists; Bitwarden asks only when its
+master-password environment variable and encrypted cache are both absent. Run
+`exec $SHELL` afterward to put the `dotfiles` command on your PATH.
 
 Override via env vars: `DOTFILES_DIR` (clone path), `DOTFILES_BRANCH`,
 `DOTFILES_REPO_URL`. The machine must already exist in the inventory (its
@@ -75,14 +77,31 @@ dotfiles check                        # dry-run everything
 
 Optional environment overrides: `DOTFILES_HOST` (target host, default
 `$(hostname)`), `DOTFILES_FAMILY` (`archlinux`, `debian`, `redhat`, or `macos`
-for `add-host` detection), `DOTFILES_BECOME=none` (skip the sudo prompt on
-NOPASSWD / headless sudo).
+for `add-host` detection), `DOTFILES_BECOME_PASSWORD` (the sudo password) and
+`DOTFILES_BITWARDEN_MASTER_PASSWORD`. Password environment variables take
+precedence for that invocation and are never persisted.
+
+When no password environment variable is set, `dotfiles` uses
+`$XDG_STATE_HOME/dotfiles/credentials/` (default
+`~/.local/state/dotfiles/credentials/`) as a mode-`0700` local cache. Each value
+is SOPS-encrypted to the age identity at `$SOPS_AGE_KEY_FILE` or
+`~/.config/sops/age/keys.txt`, and is only placed in the `dotfiles`/Ansible
+process environment. Credential caching requires `sops`, `age-keygen`, and a
+readable identity. A prompted sudo password is cached after a successful
+playbook run. A prompted Bitwarden master password is cached after the role
+successfully retrieves the configured files — including the age identity on a
+new host. Neither cache nor plaintext credential belongs in the repository or
+the tracked `~/.config/dotfiles/config.toml`.
+
+The encrypted cache protects disk-at-rest data, not a compromised login account:
+an attacker able to read the local age identity can decrypt it. Delete the
+corresponding file from the cache after rotating either password.
 
 Prefer a file? `dotfiles config` scaffolds `~/.config/dotfiles/config.toml`
-(TOML), where the same settings live more comfortably — `commit.model`,
-`commit.prompt`, `commit.url`, `commit.api_key` and `sync.become` (the
-multi-line prompt especially). Precedence: env var > config file > default. The
-`cli` role symlinks it to a repo-tracked file, so your settings are committed too.
+(TOML), where the non-secret settings live more comfortably — `commit.model`,
+`commit.prompt`, `commit.url` and `commit.api_key` (the multi-line prompt
+especially). Precedence: env var > config file > default. The `cli` role
+symlinks it to a repo-tracked file, so your settings are committed too.
 
 `dotfiles commit` stages everything, runs a secret scanner first when one is
 installed (`gitleaks`, else `git-secrets`) and aborts if it flags anything, then
@@ -105,11 +124,14 @@ without a key it still runs every check and just skips that step.
 
 ## Running the playbook directly
 
-The CLI is just a convenience wrapper around Ansible; these are the equivalents:
+Use `dotfiles sync` or `dotfiles check` for encrypted credential reuse. Direct
+Ansible invocations intentionally do not read the local cache; export
+`DOTFILES_BECOME_PASSWORD` in the calling environment when sudo needs a
+password:
 
 ```bash
-ansible-playbook site.yml --limit "$(hostname)" --ask-become-pass     # = sync
-ansible-playbook site.yml --limit "$(hostname)" --check --diff -K     # = check
+ansible-playbook site.yml --limit "$(hostname)"
+ansible-playbook site.yml --limit "$(hostname)" --check --diff
 ansible-inventory --host "$(hostname)"          # show this host's merged vars
 ```
 
@@ -169,10 +191,13 @@ vault. Declare what to fetch in your host file (`bitwarden_ssh_keys`,
 `bitwarden_notes`, `bitwarden_files`), then:
 
 ```bash
-dotfiles secrets        # prompts for your Bitwarden master password
+dotfiles secrets
 ```
 
-Credentials are prompted at runtime and never written to disk. See
+`dotfiles secrets` first uses `DOTFILES_BITWARDEN_MASTER_PASSWORD`, then the
+encrypted local cache, and prompts only if both are absent. A prompted value is
+cached only after the role completes successfully; the `BW_SESSION` remains
+in-memory and the vault is still locked at the end of the run. See
 `roles/bitwarden/` for the full security model.
 
 **Environment variables from Bitwarden.** Keep each secret env var as a Secure
@@ -185,9 +210,10 @@ it to `""` to disable.
 ## Layout
 
 ```
-bin/dotfiles    the dotfiles command (symlinked onto PATH by the cli role)
-bootstrap.sh    install prerequisites on a fresh host
-site.yml        the playbook — common baseline, then per-host additional_roles
-inventory/      hosts.yml, group_vars/ (common + per-family), host_vars/
-roles/          common, zsh, cli, git, neovim, herdr, libreoffice, bitwarden, k8s-tools, upstream-tools, docker, tailscale
+bin/dotfiles              the dotfiles command (symlinked onto PATH by the cli role)
+bin/dotfiles-credentials  SOPS/age-encrypted, per-user credential cache helper
+bootstrap.sh              install prerequisites on a fresh host
+site.yml                  the playbook — common baseline, then per-host additional_roles
+inventory/                hosts.yml, group_vars/ (common + per-family), host_vars/
+roles/                    common, zsh, cli, git, neovim, herdr, libreoffice, bitwarden, k8s-tools, upstream-tools, docker, tailscale
 ```

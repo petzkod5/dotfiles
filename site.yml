@@ -7,14 +7,22 @@
 # the layered variables described in the README.
 #
 # Usage:
-#   ansible-playbook site.yml --ask-become-pass             # whole fleet
-#   ansible-playbook site.yml --limit petzko-lt-asus -K        # one host (+ extra roles)
-#   ansible-playbook site.yml --skip-tags additional_roles -K  # skip per-host extra roles
+#   dotfiles sync                                  # encrypted local credentials
+#   dotfiles check --skip-tags additional_roles     # config-only preview
+#   dotfiles secrets                               # Bitwarden-only secret refresh
 # =============================================================================
 - name: Apply common baseline to all managed hosts
   hosts: all
-  become: true
+  become: false
   gather_facts: true
+  pre_tasks:
+    - name: Supply the sudo password from the dotfiles environment
+      ansible.builtin.set_fact:
+        ansible_become_password: "{{ lookup('ansible.builtin.env', 'DOTFILES_BECOME_PASSWORD') }}"
+      no_log: true
+      when: lookup('ansible.builtin.env', 'DOTFILES_BECOME_PASSWORD') | length > 0
+      tags:
+        - always
   roles:
     - role: common
       tags:

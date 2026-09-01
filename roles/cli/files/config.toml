@@ -17,5 +17,3 @@ should follow conventionalcommits standards and be a general synopsis of the
 changes.
 """
 
-[sync]
-# become = "none"   # skip the sudo-password prompt (NOPASSWD / headless sudo)
