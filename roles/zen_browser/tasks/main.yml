@@ -1,0 +1,115 @@
+---
+# Install only the Zen Browser application from official release assets.
+
+- name: Check whether Zen is installed on macOS
+  ansible.builtin.stat:
+    path: "{{ zen_browser_macos_executable_path }}"
+  register: zen_browser_macos_executable
+  become: false
+  when: ansible_facts['system'] == 'Darwin'
+- name: Install Zen Browser on macOS
+  when:
+    - ansible_facts['system'] == 'Darwin'
+    - not zen_browser_macos_executable.stat.exists
+  block:
+    - name: Create a Zen Browser staging directory
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: zen-browser
+      register: zen_browser_macos_staging
+
+    - name: Download the Zen Browser disk image
+      ansible.builtin.get_url:
+        url: "{{ zen_browser_macos_dmg_url }}"
+        dest: "{{ zen_browser_macos_staging.path }}/zen.dmg"
+        checksum: "{{ zen_browser_macos_dmg_checksum }}"
+        mode: "0644"
+
+    - name: Create the Zen Browser mount directory
+      ansible.builtin.file:
+        path: "{{ zen_browser_macos_staging.path }}/mount"
+        state: directory
+        mode: "0755"
+
+    - name: Mount the Zen Browser disk image
+      ansible.builtin.command:
+        cmd: >-
+          hdiutil attach -nobrowse -readonly
+          -mountpoint {{ zen_browser_macos_staging.path }}/mount
+          {{ zen_browser_macos_staging.path }}/zen.dmg
+      register: zen_browser_macos_dmg_mount
+      changed_when: true
+
+    - name: Remove an incomplete Zen Browser app bundle
+      ansible.builtin.file:
+        path: "{{ zen_browser_macos_app_path }}"
+        state: absent
+      become: true
+
+    - name: Copy Zen Browser to Applications
+      ansible.builtin.copy:
+        src: "{{ zen_browser_macos_staging.path }}/mount/Zen.app"
+        dest: /Applications/
+        mode: preserve
+        remote_src: true
+      become: true
+  always:
+    - name: Unmount the Zen Browser disk image
+      ansible.builtin.command:
+        cmd: "hdiutil detach {{ zen_browser_macos_staging.path }}/mount"
+      changed_when: true
+      when:
+        - zen_browser_macos_dmg_mount is defined
+        - zen_browser_macos_dmg_mount is succeeded
+
+    - name: Remove the Zen Browser staging directory
+      ansible.builtin.file:
+        path: "{{ zen_browser_macos_staging.path }}"
+        state: absent
+      when: zen_browser_macos_staging is defined
+- name: Install Zen Browser on Linux
+  become: false
+  when: ansible_facts['system'] == 'Linux'
+  block:
+    - name: Assert Zen Browser supports this Linux architecture
+      ansible.builtin.assert:
+        that:
+          - ansible_facts['architecture'] in (zen_browser_linux_appimage_arch_map.keys() | list)
+        fail_msg: >-
+          Zen Browser Linux AppImages are supported only for x86_64 and aarch64;
+          this host reports {{ ansible_facts['architecture'] }}.
+        quiet: true
+
+    - name: Ensure the user binary directory exists
+      ansible.builtin.file:
+        path: "{{ zen_browser_linux_bin_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Download Zen Browser AppImage
+      ansible.builtin.get_url:
+        url: "{{ zen_browser_linux_appimage_arch_map[ansible_facts['architecture']]['url'] }}"
+        dest: "{{ zen_browser_linux_appimage_path }}"
+        checksum: "{{ zen_browser_linux_appimage_arch_map[ansible_facts['architecture']]['checksum'] }}"
+        mode: "0755"
+- name: Install Zen Browser on Windows
+  become: true
+  when: ansible_facts['system'] == 'Win32NT'
+  block:
+    - name: Assert Zen Browser supports this Windows architecture
+      ansible.builtin.assert:
+        that:
+          - ansible_facts['architecture2'] in (zen_browser_windows_installer_arch_map.keys() | list)
+        fail_msg: >-
+          Zen Browser Windows installers are supported only for x86_64 and arm64;
+          this host reports {{ ansible_facts['architecture2'] }}.
+        quiet: true
+
+    - name: Install Zen Browser
+      ansible.windows.win_package:
+        path: "{{ zen_browser_windows_installer_arch_map[ansible_facts['architecture2']]['url'] }}"
+        arguments: /S
+        checksum: "{{ zen_browser_windows_installer_arch_map[ansible_facts['architecture2']]['checksum'] }}"
+        checksum_algorithm: sha256
+        creates_path: "{{ zen_browser_windows_install_path }}"
+        state: present

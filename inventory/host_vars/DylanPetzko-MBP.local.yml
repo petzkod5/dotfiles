@@ -20,6 +20,7 @@ additional_roles:
   - neovim
   - herdr
   - libreoffice
+  - zen_browser
   - orca
   - k8s-tools
   - upstream-tools
