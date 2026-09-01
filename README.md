@@ -124,10 +124,9 @@ without a key it still runs every check and just skips that step.
 
 ## Running the playbook directly
 
-Use `dotfiles sync` or `dotfiles check` for encrypted credential reuse. Direct
-Ansible invocations intentionally do not read the local cache; export
-`DOTFILES_BECOME_PASSWORD` in the calling environment when sudo needs a
-password:
+`dotfiles sync` and `dotfiles check` prompt and persist credentials when needed.
+Direct Ansible invocations also load the encrypted sudo cache before their first
+privileged task; `DOTFILES_BECOME_PASSWORD` overrides it for that invocation.
 
 ```bash
 ansible-playbook site.yml --limit "$(hostname)"
