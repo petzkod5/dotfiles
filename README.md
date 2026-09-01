@@ -26,8 +26,8 @@ Darwin hosts use [Homebrew](https://brew.sh) for formulae and casks. On a fresh
 machine, `bootstrap.sh` installs Homebrew as the login user when needed, then
 loads `/opt/homebrew/bin/brew shellenv` on Apple Silicon or
 `/usr/local/bin/brew shellenv` on Intel before installing Git, Python, and
-Ansible. The `macos` inventory family disables Linux-only Flatpak, locale, and
-`/etc/hosts` management.
+Ansible. The `macos` inventory family disables Linux-only Flatpak and locale
+management.
 
 ## Install remotely (one command)
 

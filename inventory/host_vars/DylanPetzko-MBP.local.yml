@@ -1,7 +1,5 @@
 ---
 # Redhorse Corporation Apple-silicon work laptop.
-common_manage_hostname: true
-common_hostname: "DylanPetzko-MBP.local"
 
 # Bitwarden desktop app in addition to the bitwarden-cli Homebrew formula.
 common_homebrew_casks_host:

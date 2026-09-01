@@ -17,10 +17,6 @@
 common_manage_locale: true
 common_locale: "en_US.UTF-8"
 
-# --- Identity ---------------------------------------------------------------
-# Off by default so a run never renames a machine unexpectedly.
-common_manage_hostname: false
-
 # --- Packages every machine should carry (names valid on all families) ------
 common_packages_all:
   - ca-certificates
