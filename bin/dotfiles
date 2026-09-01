@@ -33,6 +33,10 @@ command -v ansible-playbook >/dev/null 2>&1 \
   || die "ansible-playbook not found — run ${DOTFILES_DIR}/bootstrap.sh first."
 [ -f "${DOTFILES_DIR}/site.yml" ] \
   || die "site.yml not found in ${DOTFILES_DIR} (set DOTFILES_DIR to the repo)."
+CREDENTIAL_HELPER="${DOTFILES_DIR}/bin/dotfiles-credentials"
+[ -x "$CREDENTIAL_HELPER" ] \
+  || die "dotfiles-credentials not found in ${DOTFILES_DIR}; update this checkout."
+
 # --- configuration ----------------------------------------------------------
 # Optional TOML config at ~/.config/dotfiles/config.toml (override path with
 # DOTFILES_CONFIG). Precedence: environment variable > config file > default.
@@ -84,28 +88,79 @@ pick() { local e="$1" c; c="$(cfg "$2")"; printf '%s' "${e:-${c:-$3}}"; }
 _default_prompt="Commit the changes in this dotfiles repository. Ensure you check for secrets before committing. You must run gitleaks before committing. The commit message should follow conventionalcommits standards and be a general synopsis of the changes."
 
 # Settings: environment variable > config file > built-in default.
-DOTFILES_BECOME="$(pick "${DOTFILES_BECOME:-}" sync.become "")"
 OPENROUTER_API_KEY="$(pick "${OPENROUTER_API_KEY:-}" commit.api_key "")"
 OPENROUTER_MODEL="$(pick "${OPENROUTER_MODEL:-}" commit.model openai/gpt-4o-mini)"
 OPENROUTER_URL="$(pick "${OPENROUTER_URL:-}" commit.url https://openrouter.ai/api/v1/chat/completions)"
 DOTFILES_COMMIT_PROMPT="$(pick "${DOTFILES_COMMIT_PROMPT:-}" commit.prompt "$_default_prompt")"
 
-# Become (sudo) password — prompt by default. Ansible runs sudo with -n, so a
-# needed-but-missing password kills the run mid-play. Set become=none (config
-# sync.become, or DOTFILES_BECOME) only for genuine NOPASSWD / headless sudo.
-become=(--ask-become-pass)
-case "$DOTFILES_BECOME" in none|no|0) become=() ;; esac
+# Privilege credentials are resolved only for commands that run a playbook.
+# DOTFILES_BECOME_PASSWORD takes precedence over the encrypted local cache.
+# SOPS/age encryption lets the cache stay outside Git and out of shell startup.
+sudo_password_is_valid() {
+  printf '%s\n' "$1" | sudo -S -p '' -v >/dev/null 2>&1
+}
+
+prepare_become_password() {
+  DOTFILES_CACHE_BECOME_PASSWORD=""
+
+  [ "$(id -u)" -ne 0 ] || return 0
+  command -v sudo >/dev/null 2>&1 || die "sudo is required to run privileged playbook tasks."
+
+  # NOPASSWD sudo and a live sudo timestamp need neither a password nor a cache.
+  sudo -n true >/dev/null 2>&1 && return 0
+
+  if [ -n "${DOTFILES_BECOME_PASSWORD:-}" ]; then
+    sudo_password_is_valid "$DOTFILES_BECOME_PASSWORD" \
+      || die "DOTFILES_BECOME_PASSWORD was rejected by sudo."
+    export DOTFILES_BECOME_PASSWORD
+    return 0
+  fi
+
+  local cached cache_status password
+  if cached="$("$CREDENTIAL_HELPER" get sudo-password)"; then
+    if sudo_password_is_valid "$cached"; then
+      DOTFILES_BECOME_PASSWORD="$cached"
+      export DOTFILES_BECOME_PASSWORD
+      return 0
+    fi
+    warn "Cached sudo password was rejected; prompting for a replacement."
+  else
+    cache_status=$?
+    [ "$cache_status" -eq 1 ] \
+      || die "Cannot read the cached sudo password; repair or remove its SOPS cache."
+  fi
+
+  printf 'Sudo password for %s: ' "$(id -un)" >&2
+  IFS= read -r -s password </dev/tty || die "Could not read the sudo password."
+  printf '\n' >&2
+  sudo_password_is_valid "$password" || die "Sudo password was rejected."
+
+  DOTFILES_BECOME_PASSWORD="$password"
+  DOTFILES_CACHE_BECOME_PASSWORD="$password"
+  export DOTFILES_BECOME_PASSWORD
+}
+
+cache_prompted_become_password() {
+  [ -n "${DOTFILES_CACHE_BECOME_PASSWORD:-}" ] || return 0
+  printf '%s' "$DOTFILES_CACHE_BECOME_PASSWORD" \
+    | "$CREDENTIAL_HELPER" set sudo-password \
+    || warn "Sudo password was not cached; SOPS/age identity is unavailable."
+  DOTFILES_CACHE_BECOME_PASSWORD=""
+}
 
 play() {  # play <playbook> [extra ansible-playbook args...]
-  local pb="$1"; shift
+  local pb="$1" rc
+  shift
+  prepare_become_password
+  set +e
   (
     cd "$DOTFILES_DIR"
-    if [ "${#become[@]}" -gt 0 ]; then
-      ansible-playbook "$pb" --limit "$HOST" "${become[@]}" "$@"
-    else
-      ansible-playbook "$pb" --limit "$HOST" "$@"
-    fi
+    ansible-playbook "$pb" --limit "$HOST" "$@"
   )
+  rc=$?
+  set -e
+  [ "$rc" -ne 0 ] || cache_prompted_become_password
+  return "$rc"
 }
 
 add_host() {  # add-host [HOSTNAME] — register a new machine so it can be configured
@@ -310,9 +365,9 @@ do_review() {  # review — dry-run the playbook and summarise the pending chang
   say "Previewing ${HOST} (dry-run) and summarising changes"
   local tmp rc=0
   tmp="$(mktemp)" || die "could not create a temp file."
-  # Show the check output live (tee) AND capture stdout for the LLM. The
-  # --ask-become-pass prompt reads from the tty and is unaffected by the pipe;
-  # stderr (prompt, warnings) is left on the terminal, not captured.
+  # Show the check output live (tee) AND capture stdout for the LLM. The sudo
+  # resolver reads from /dev/tty, so it is unaffected by the pipe; stderr
+  # (prompt, warnings) is left on the terminal, not captured.
   set +o pipefail
   play site.yml --check --diff "$@" | tee "$tmp"
   rc=${PIPESTATUS[0]}
@@ -441,8 +496,6 @@ ensure_config() {  # create the config (commented template) if it does not exist
 # changes.
 # """
 
-[sync]
-# become = "none"   # skip the sudo-password prompt (NOPASSWD / headless sudo)
 EOF
   chmod 600 "$DOTFILES_CONFIG"
   say "Created ${DOTFILES_CONFIG}"
@@ -464,7 +517,7 @@ ${b}Commands:${n}
   review    Dry-run the playbook and summarise pending changes (needs OPENROUTER_API_KEY)
   doctor    Health-check this setup; LLM suggests fixes if OPENROUTER_API_KEY is set
   edit      Open the repo in \$EDITOR
-  config    Create/edit ~/.config/dotfiles/config.toml (prompt, model, become)
+  config    Create/edit ~/.config/dotfiles/config.toml (non-secret settings)
   status    Show repo path, host and git working-tree status
   help      Show this help
 
@@ -474,11 +527,12 @@ Extra args pass through to ansible-playbook, e.g.:
   dotfiles check --tags additional_roles
 
 Env: DOTFILES_DIR (repo, auto-detected) · DOTFILES_HOST (default: \$(hostname))
-     DOTFILES_BECOME=none to skip the sudo-password prompt (NOPASSWD/headless)
-     DOTFILES_FAMILY=archlinux|debian|redhat|macos to override add-host detection
+     DOTFILES_BECOME_PASSWORD / DOTFILES_BITWARDEN_MASTER_PASSWORD override
+       the encrypted local cache for this invocation
+     SOPS_AGE_KEY_FILE overrides ~/.config/sops/age/keys.txt
+     DOTFILES_FAMILY=archlinux|debian|redhat|macos overrides add-host detection
      OPENROUTER_API_KEY enables an LLM commit message for 'commit';
        OPENROUTER_MODEL (default openai/gpt-4o-mini) + DOTFILES_COMMIT_PROMPT tune it
-     Any of the above can live in ~/.config/dotfiles/config.toml — 'dotfiles config'
 EOF
 }
 

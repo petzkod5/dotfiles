@@ -41,6 +41,7 @@
     name: "{{ _common_packages_resolved }}"
     state: present
     update_cache: true
+  become: true
   when: ansible_facts['os_family'] == 'Archlinux'
 
 # GitHub CLI is not in the default Debian/Ubuntu repos — add the official
@@ -48,6 +49,7 @@
 # before the apt install below picks up `gh`.
 - name: Set up the GitHub CLI apt repository (Debian)
   when: ansible_facts['os_family'] == 'Debian'
+  become: true
   block:
     - name: Ensure the apt keyrings directory exists
       ansible.builtin.file:
@@ -81,6 +83,7 @@
     state: present
     update_cache: true
     cache_valid_time: 3600
+  become: true
   when: ansible_facts['os_family'] == 'Debian'
 
 - name: Install packages (RedHat)
@@ -88,3 +91,4 @@
     name: "{{ _common_packages_resolved }}"
     state: present
   when: ansible_facts['os_family'] == 'RedHat'
+  become: true

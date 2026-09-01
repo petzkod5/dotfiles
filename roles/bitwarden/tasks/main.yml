@@ -112,6 +112,37 @@
   when: _bw_need_login | bool
 
 # ---- Unlock (always needed to obtain a session key) -----------------------
+# The wrapper can supply this process-local value from the encrypted SOPS cache.
+# An explicit environment value wins; it is never copied to persistent storage.
+- name: Read the Bitwarden master password from the environment
+  ansible.builtin.set_fact:
+    bitwarden_master_password: "{{ lookup('ansible.builtin.env', 'DOTFILES_BITWARDEN_MASTER_PASSWORD') }}"
+  when:
+    - bitwarden_master_password | default('') | length == 0
+    - lookup('ansible.builtin.env', 'DOTFILES_BITWARDEN_MASTER_PASSWORD') | length > 0
+  no_log: true
+
+- name: Read the cached Bitwarden master password
+  ansible.builtin.command:
+    argv:
+      - "{{ playbook_dir }}/bin/dotfiles-credentials"
+      - get
+      - bitwarden-master-password
+  register: _bw_cached_master_password
+  changed_when: false
+  failed_when: _bw_cached_master_password.rc not in [0, 1]
+  no_log: true
+  when: bitwarden_master_password | default('') | length == 0
+
+- name: Resolve the Bitwarden master password from the cache
+  ansible.builtin.set_fact:
+    bitwarden_master_password: "{{ _bw_cached_master_password.stdout }}"
+  when:
+    - bitwarden_master_password | default('') | length == 0
+    - _bw_cached_master_password is defined
+    - _bw_cached_master_password.rc == 0
+  no_log: true
+
 - name: Prompt for the Bitwarden master password
   ansible.builtin.pause:
     prompt: "Bitwarden master password"
@@ -346,6 +377,17 @@
   when:
     - bitwarden_env_folder | length > 0
     - _bw_env_folder_id | length > 0
+
+- name: Cache the prompted Bitwarden master password
+  ansible.builtin.command:
+    argv:
+      - "{{ playbook_dir }}/bin/dotfiles-credentials"
+      - set
+      - bitwarden-master-password
+    stdin: "{{ bitwarden_master_password }}"
+    stdin_add_newline: false
+  when: _bw_mpw is defined
+  no_log: true
 
 # ---- Cleanup ---------------------------------------------------------------
 - name: Lock the vault

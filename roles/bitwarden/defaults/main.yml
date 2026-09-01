@@ -55,8 +55,6 @@ bitwarden_notes: []
 bitwarden_env_folder: "environment-variables"
 bitwarden_env_file: "{{ bitwarden_home }}/.config/zsh/secrets.env"
 
-# --- Credentials ------------------------------------------------------------
-# bitwarden_client_id / bitwarden_client_secret: API key, only needed to LOG IN.
-#   Skipped entirely when the CLI is already authenticated. Prompted when needed,
-#   or pass via -e (see README). Low-sensitivity + revocable.
-# bitwarden_master_password: prompted at runtime to unlock; NEVER store it.
+# bitwarden_master_password: used only to unlock. `dotfiles secrets` first
+# checks DOTFILES_BITWARDEN_MASTER_PASSWORD, then an encrypted local SOPS/age
+# cache; an interactively supplied value is cached only after a successful run.

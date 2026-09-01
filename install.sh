@@ -82,7 +82,7 @@ log "Running bootstrap.sh (git/python/ansible + Galaxy collections)"
 # `--limit $(hostname)` run would silently match nothing.
 host=$(hostname)
 if ansible-inventory -i inventory/hosts.yml --host "$host" >/dev/null 2>&1; then
-  log "Applying the playbook to $host (you will be prompted for the sudo password)"
+  log "Applying the playbook to $host (credentials prompt only when unavailable)"
   ./bin/dotfiles sync
   log "Done. Run 'exec \$SHELL' to put the dotfiles command on your PATH."
 else
