@@ -5,11 +5,6 @@
 # This file is where this specific machine deviates from the baseline.
 # =============================================================================
 
-# Enforce the system hostname. This matches the machine's live /etc/hostname,
-# so the task is idempotent (it keeps the name pinned to petzko-lt-asus).
-common_manage_hostname: true
-common_hostname: "petzko-lt-asus"
-
 # --- Packages unique to this laptop (Arch names) ----------------------------
 # base-devel, neovim, zsh, fzf, fd and bat now come from the common/family
 # layers, so they are intentionally not repeated here.

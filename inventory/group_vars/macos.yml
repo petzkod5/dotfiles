@@ -1,7 +1,6 @@
 ---
 # Darwin hosts use Homebrew formulae and casks rather than Linux package tools.
 common_manage_flatpak: false
-common_manage_etc_hosts: false
 common_manage_locale: false
 common_user_shell: /bin/zsh
 
