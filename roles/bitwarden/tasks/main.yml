@@ -386,7 +386,7 @@
       - bitwarden-master-password
     stdin: "{{ bitwarden_master_password }}"
     stdin_add_newline: false
-  when: _bw_mpw is defined
+  when: _bw_mpw is defined and not (_bw_mpw.skipped | default(true))
   no_log: true
 
 # ---- Cleanup ---------------------------------------------------------------

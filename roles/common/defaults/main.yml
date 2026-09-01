@@ -15,7 +15,6 @@ common_hostname: "{{ inventory_hostname }}"
 common_manage_etc_hosts: true
 
 # --- Localisation -----------------------------------------------------------
-common_timezone: "UTC"
 common_manage_locale: false
 common_locale: "en_US.UTF-8"
 

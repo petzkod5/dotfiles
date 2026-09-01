@@ -5,7 +5,7 @@
 # Precedence (low -> high):
 #   role defaults  <  group_vars/all  <  group_vars/<family>  <  host_vars/<host>
 #
-# Scalars (timezone, locale, flags) are *overridden* by higher layers.
+# Scalars (locale, flags) are *overridden* by higher layers.
 # Package lists *accumulate*: each layer fills its own bucket
 #   common_packages         (role baseline, identical names everywhere)
 #   common_packages_all     (this file — fleet-wide additions)
@@ -14,7 +14,6 @@
 # =============================================================================
 
 # --- Localisation -----------------------------------------------------------
-common_timezone: "UTC"
 common_manage_locale: true
 common_locale: "en_US.UTF-8"
 
