@@ -1,11 +1,6 @@
 ---
 # Base system configuration shared by all distributions.
 
-- name: Set system timezone
-  community.general.timezone:
-    name: "{{ common_timezone }}"
-  become: true
-
 - name: Generate and enable locale
   community.general.locale_gen:
     name: "{{ common_locale }}"
