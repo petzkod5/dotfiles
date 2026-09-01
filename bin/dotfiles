@@ -500,6 +500,82 @@ EOF
   chmod 600 "$DOTFILES_CONFIG"
   say "Created ${DOTFILES_CONFIG}"
 }
+do_sync() {  # sync [--roles|-r ROLE[,ROLE...]] [extra ansible-playbook args...]
+  local role_value="" roles_json="" sep="" role
+  local roles_selected=0
+  local -a selected_roles=() ansible_args=()
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --) ansible_args+=("$@"); break ;;
+      -r|--roles)
+        [ "$#" -ge 2 ] || die "usage: dotfiles sync -r ROLE[,ROLE...]"
+        case "$2" in
+          ""|--*) die "dotfiles sync: -r requires a comma-delimited role list" ;;
+        esac
+        [ "$roles_selected" -eq 0 ] \
+          || die "dotfiles sync: specify -r/--roles only once"
+        role_value="$2"
+        roles_selected=1
+        shift 2
+        ;;
+      -r=*) [ "$roles_selected" -eq 0 ] \
+              || die "dotfiles sync: specify -r/--roles only once"
+            role_value="${1#-r=}"
+            [ -n "$role_value" ] \
+              || die "dotfiles sync: -r requires a comma-delimited role list"
+            roles_selected=1
+            shift
+            ;;
+      --roles=*) [ "$roles_selected" -eq 0 ] \
+                    || die "dotfiles sync: specify -r/--roles only once"
+                  role_value="${1#--roles=}"
+                  [ -n "$role_value" ] \
+                    || die "dotfiles sync: --roles requires a comma-delimited role list"
+                  roles_selected=1
+                  shift
+                  ;;
+      -r*) [ "$roles_selected" -eq 0 ] \
+             || die "dotfiles sync: specify -r/--roles only once"
+           role_value="${1#-r}"
+           [ -n "$role_value" ] \
+             || die "dotfiles sync: -r requires a comma-delimited role list"
+           roles_selected=1
+           shift
+           ;;
+      *) ansible_args+=("$1"); shift ;;
+    esac
+  done
+
+  if [ "$roles_selected" -eq 1 ]; then
+    case "$role_value" in
+      ""|,*|*,|*,,*) die "dotfiles sync: invalid role list '${role_value}'" ;;
+    esac
+    IFS=',' read -r -a selected_roles <<< "$role_value"
+    for role in "${selected_roles[@]}"; do
+      case "$role" in
+        ""|*[!A-Za-z0-9_.-]*) die "dotfiles sync: invalid role '${role}'" ;;
+      esac
+      # The collection role is long when referenced from host_vars; keep the
+      # short name required by the CLI as an explicit alias.
+      [ "$role" = omp ] && role="petzko.omp.omp_full"
+      roles_json+="${sep}\"${role}\""
+      sep=","
+    done
+    roles_json="{\"additional_roles\":[${roles_json}]}"
+    # Scope to the additional_roles play (skipping the common baseline) and
+    # override the host's role list for this invocation.
+    if [ "${#ansible_args[@]}" -gt 0 ]; then
+      play site.yml --tags additional_roles -e "$roles_json" "${ansible_args[@]}"
+    else
+      play site.yml --tags additional_roles -e "$roles_json"
+    fi
+  elif [ "${#ansible_args[@]}" -gt 0 ]; then
+    play site.yml "${ansible_args[@]}"
+  else
+    play site.yml
+  fi
+}
 
 usage() {
   cat <<EOF
@@ -508,7 +584,7 @@ ${b}dotfiles${n} — sync this machine to ${DOTFILES_DIR}
 ${b}Usage:${n} dotfiles <command> [extra ansible-playbook args...]
 
 ${b}Commands:${n}
-  sync      Apply the playbook to this host (main command)
+  sync      Apply the full playbook; -r ROLE[,ROLE...] runs only those extras
   check     Preview changes without applying them (--check --diff)
   secrets   Pull secrets from Bitwarden (bitwarden role only)
   update    Install/refresh Galaxy collections (requirements.yml)
@@ -522,7 +598,10 @@ ${b}Commands:${n}
   help      Show this help
 
 Extra args pass through to ansible-playbook, e.g.:
-  dotfiles sync --skip-tags bitwarden     # config only, skip secret-pulling
+  dotfiles sync -r bitwarden           # only the bitwarden role
+  dotfiles sync -r bitwarden,omp       # only these two roles
+  dotfiles sync --roles bitwarden,omp  # long form; omp aliases the OMP collection role
+  dotfiles sync --skip-tags bitwarden  # config only, skip secret-pulling
   dotfiles sync --tags packages
   dotfiles check --tags additional_roles
 
@@ -538,7 +617,7 @@ EOF
 
 cmd="${1:-help}"; shift 2>/dev/null || true
 case "$cmd" in
-  sync)            say "Applying ${HOST} <- ${DOTFILES_DIR}"; play site.yml "$@" ;;
+  sync)            say "Applying ${HOST} <- ${DOTFILES_DIR}"; do_sync "$@" ;;
   check|diff)      say "Previewing ${HOST} (no changes applied)"; play site.yml --check --diff "$@" ;;
   secrets)         say "Pulling secrets for ${HOST}"
                    # Only the bitwarden role: scope to the additional_roles play

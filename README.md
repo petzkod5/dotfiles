@@ -56,7 +56,7 @@ current machine. Any extra arguments pass straight through to `ansible-playbook`
 
 | Command             | What it does                                              |
 |---------------------|----------------------------------------------------------|
-| `dotfiles sync`     | Apply the full configuration to this host (main command) |
+| `dotfiles sync`     | Apply the full configuration to this host; `-r` selects extras |
 | `dotfiles check`    | Preview changes without applying (`--check --diff`)      |
 | `dotfiles add-host` | Register this machine in the inventory + a host_vars file|
 | `dotfiles commit`   | Secret-scan, then commit all changes with a dated message|
@@ -70,10 +70,19 @@ current machine. Any extra arguments pass straight through to `ansible-playbook`
 | `dotfiles help`     | Full help                                                |
 
 ```bash
-dotfiles sync --skip-tags bitwarden   # config only, skip secret-pulling
-dotfiles sync --tags packages         # only the package tasks
-dotfiles check                        # dry-run everything
+dotfiles sync -r bitwarden           # only the bitwarden role
+dotfiles sync -r bitwarden,omp       # only these roles (`omp` is an alias)
+dotfiles sync --skip-tags bitwarden  # config only, skip secret-pulling
+dotfiles sync --tags packages        # only the package tasks
+dotfiles check                       # dry-run everything
 ```
+
+`dotfiles sync -r ROLE[,ROLE...]` (or `--roles ROLE[,ROLE...]`) runs only the listed additional roles
+for that invocation (skipping the common baseline), replacing the host's
+`additional_roles` list without changing the host file. Role names must be
+comma-separated with no spaces or empty entries. The CLI accepts `omp` as a
+shorthand for the `petzko.omp.omp_full` collection role. All other arguments
+pass through to `ansible-playbook`.
 
 Optional environment overrides: `DOTFILES_HOST` (target host, default
 `$(hostname)`), `DOTFILES_FAMILY` (`archlinux`, `debian`, `redhat`, or `macos`
@@ -173,7 +182,7 @@ The most common edits:
 | `upstream-tools` | dev CLIs from Linux upstream archives; Homebrew formulae on macOS |
 | `docker`         | Docker Engine + systemd on Linux; Docker Desktop cask on macOS |
 | `tailscale`      | `tailscaled` on Linux; Tailscale.app cask on macOS |
-| `petzko.omp.omp_full` | external `petzko.omp` collection role: OMP binary + copied config, RULES.md, AGENTS.md, `/commit` extension |
+| `petzko.omp.omp_full` (CLI: `omp`) | external `petzko.omp` collection role: OMP binary + copied config, RULES.md, AGENTS.md, `/commit` extension |
 
 The file-symlinking roles (`zsh`, `cli`, `git`, `neovim`) mean editing the live
 file edits the tracked repo file — customise once, then `dotfiles commit`. The
