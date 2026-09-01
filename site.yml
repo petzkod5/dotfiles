@@ -16,11 +16,31 @@
   become: false
   gather_facts: true
   pre_tasks:
-    - name: Supply the sudo password from the dotfiles environment
-      ansible.builtin.set_fact:
-        ansible_become_password: "{{ lookup('ansible.builtin.env', 'DOTFILES_BECOME_PASSWORD') }}"
+    - name: Read the cached sudo password
+      ansible.builtin.command:
+        argv:
+          - "{{ playbook_dir }}/bin/dotfiles-credentials"
+          - get
+          - sudo-password
+      register: _dotfiles_cached_become_password
+      changed_when: false
+      failed_when: _dotfiles_cached_become_password.rc not in [0, 1]
+      check_mode: false
       no_log: true
-      when: lookup('ansible.builtin.env', 'DOTFILES_BECOME_PASSWORD') | length > 0
+      when: lookup('ansible.builtin.env', 'DOTFILES_BECOME_PASSWORD') | length == 0
+      tags:
+        - always
+
+    - name: Supply the sudo password from dotfiles credentials
+      ansible.builtin.set_fact:
+        ansible_become_password: >-
+          {{ lookup('ansible.builtin.env', 'DOTFILES_BECOME_PASSWORD')
+             if lookup('ansible.builtin.env', 'DOTFILES_BECOME_PASSWORD') | length > 0
+             else _dotfiles_cached_become_password.stdout }}
+      no_log: true
+      when: >-
+        lookup('ansible.builtin.env', 'DOTFILES_BECOME_PASSWORD') | length > 0
+        or (_dotfiles_cached_become_password.rc | default(1)) == 0
       tags:
         - always
   roles:
